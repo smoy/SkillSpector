@@ -294,8 +294,19 @@ def _is_typosquat(pkg_name: str, popular: set[str], max_distance: int = 2) -> st
         if len(normalized) < 3 or len(pop_norm) < 3:
             continue
         dist = _edit_distance(normalized, pop_norm)
-        if 0 < dist <= max_distance:
-            return popular_name
+        if not 0 < dist <= max_distance:
+            continue
+        # Relative-distance guard: a genuine typosquat perturbs only a small
+        # fraction of the name. Short, legitimate-but-distinct names collide
+        # under an absolute distance of 2 (e.g. "task" is edit-distance 2 from
+        # "flask" yet is a real package) and are not typosquats. Require
+        # dist/len <= 1/3, so short names need an all-but-one-character match
+        # while longer names may still differ by two (e.g. "reqeusts" vs
+        # "requests").
+        shorter = min(len(normalized), len(pop_norm))
+        if dist * 3 > shorter:
+            continue
+        return popular_name
     return None
 
 

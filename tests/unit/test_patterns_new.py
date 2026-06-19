@@ -1012,6 +1012,14 @@ class TestSupplyChainHelpers:
     def test_is_typosquat_too_distant_returns_none(self) -> None:
         assert sc_mod._is_typosquat("completely_different", {"requests"}) is None
 
+    def test_is_typosquat_short_distinct_name_not_flagged(self) -> None:
+        # Regression: "task" is a real package and is edit-distance 2 from
+        # "flask", but distance 2 on a 4-char name is not a typosquat. Short
+        # names must clear the relative-distance guard, not just absolute <=2.
+        assert sc_mod._is_typosquat("task", {"flask"}) is None
+        # Longer names may still differ by two characters and be flagged.
+        assert sc_mod._is_typosquat("reqeusts", {"requests"}) == "requests"
+
     @pytest.mark.parametrize(
         "a,b,expected",
         [
