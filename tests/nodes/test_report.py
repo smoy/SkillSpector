@@ -381,3 +381,54 @@ def test_report_sarif_no_invocations_when_not_degraded() -> None:
     }
     result = report(state)
     assert "invocations" not in result["sarif_report"]["runs"][0]
+
+
+# ---------------------------------------------------------------------------
+# Fail-closed: a degraded deep scan must not be able to report SAFE
+# ---------------------------------------------------------------------------
+
+
+def test_degraded_scan_floors_recommendation_at_caution() -> None:
+    """No findings would normally be SAFE; a degraded LLM stage forces CAUTION."""
+    state: SkillspectorState = {
+        "filtered_findings": [],  # static score 0 -> would be SAFE
+        "component_metadata": [],
+        "has_executable_scripts": False,
+        "manifest": {},
+        "output_format": "json",
+        "use_llm": True,
+        "llm_call_log": [llm_call_record("semantic_security_discovery", ok=False, error="boom")],
+    }
+    result = report(state)
+    assert result["risk_score"] == 0  # score is left honest
+    assert result["risk_recommendation"] == "CAUTION"  # but never SAFE when degraded
+
+
+def test_non_degraded_clean_scan_stays_safe() -> None:
+    """Without degradation, a clean scan still reports SAFE (no over-flooring)."""
+    state: SkillspectorState = {
+        "filtered_findings": [],
+        "component_metadata": [],
+        "has_executable_scripts": False,
+        "manifest": {},
+        "output_format": "json",
+        "use_llm": True,
+        "llm_call_log": [llm_call_record("semantic_security_discovery", ok=True)],
+    }
+    result = report(state)
+    assert result["risk_recommendation"] == "SAFE"
+
+
+def test_degraded_scan_does_not_downgrade_a_blocking_verdict() -> None:
+    """A degraded scan that is already DO_NOT_INSTALL stays blocking (floor only lifts SAFE)."""
+    state: SkillspectorState = {
+        "filtered_findings": [_finding("P5", "CRITICAL"), _finding("P6", "CRITICAL")],
+        "component_metadata": [],
+        "has_executable_scripts": False,
+        "manifest": {},
+        "output_format": "json",
+        "use_llm": True,
+        "llm_call_log": [llm_call_record("meta_analyzer", ok=False, error="boom")],
+    }
+    result = report(state)
+    assert result["risk_recommendation"] == "DO_NOT_INSTALL"

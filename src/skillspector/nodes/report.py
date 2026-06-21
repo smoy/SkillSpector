@@ -470,6 +470,18 @@ def report(state: SkillspectorState) -> dict[str, object]:
     risk_score, risk_severity, risk_recommendation = _compute_risk_score(
         findings, has_executable_scripts
     )
+
+    # Fail closed on a degraded deep scan: when the LLM stage was requested but
+    # every call failed, the semantic analyzers were effectively skipped, so a
+    # SAFE verdict would rest on static analysis alone. An attacker can trigger
+    # this on purpose (e.g. content that breaks the LLM call) to dodge semantic
+    # scrutiny. Floor the recommendation at CAUTION so an install-gate ASKS
+    # rather than auto-allows; risk_score / severity are left untouched (they
+    # honestly reflect what static analysis found), and llm_degraded / llm_error
+    # explain why the verdict was raised.
+    if degraded and risk_recommendation == "SAFE":
+        risk_recommendation = "CAUTION"
+
     sarif_report = _build_sarif(findings, degraded_notice=degraded_notice)
 
     if output_format == "terminal":
