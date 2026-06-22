@@ -94,13 +94,26 @@ def _compute_risk_score(
     a quarter. Occurrences beyond the third are ignored for scoring purposes.
     This prevents repeated pattern matches from inflating the score unboundedly.
 
+    Each finding's contribution is also scaled by its confidence value (clamped
+    to [0, 1]). Findings with confidence <= 0 are skipped entirely — they do not
+    contribute to the score but remain in the reported findings list.
+
+    Within each rule_id bucket, findings are processed in severity-descending
+    order so that the highest-severity occurrence always receives the full weight.
+
     Base points per severity: CRITICAL=50, HIGH=25, MEDIUM=10, LOW=5.
     Multiplier: 1.3x if has_executable_scripts.
     """
+    severity_rank = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+    sorted_findings = sorted(
+        findings,
+        key=lambda f: (f.rule_id or "UNKNOWN", severity_rank.get((f.severity or "LOW").upper(), 4)),
+    )
+
     rule_occurrence_count: dict[str, int] = {}
     score = 0.0
 
-    for f in findings:
+    for f in sorted_findings:
         confidence = max(0.0, min(1.0, f.confidence))
         if confidence <= 0.0:
             continue
