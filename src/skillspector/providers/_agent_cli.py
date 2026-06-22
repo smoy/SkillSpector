@@ -279,7 +279,12 @@ def _build_codex_argv(binary: str, model: str, max_output_tokens: int = 0) -> li
 
     ``--sandbox read-only``
         Most restrictive sandbox mode. Model-generated shell commands are
-        restricted to read-only filesystem access; no code execution.
+        restricted to read-only filesystem access; no code execution. Unlike
+        claude/gemini (which block model tool use entirely), codex's strictest
+        mode still permits read-only filesystem *reads* by model-generated
+        commands. This is informational, not an exfil channel: the call runs in
+        an isolated empty temp CWD, output returns only to the operator's own
+        report, and there is no network egress path.
 
     ``--ephemeral``
         Do not persist session files to disk (no residue from the scan).

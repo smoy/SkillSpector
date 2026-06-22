@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import NoReturn
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
@@ -178,12 +179,28 @@ class AgentCLIChatModel:
 
     Implements only the surface the analyzers use: ``invoke`` (returns an
     object with ``.content``), ``ainvoke``, and ``with_structured_output``.
+    The rest of the ``BaseChatModel`` surface (``batch``, ``stream``,
+    callbacks) is intentionally unsupported; the stubs below make that boundary
+    explicit so a future analyzer reaching for it fails loudly with a clear
+    message rather than a confusing ``AttributeError``.
     """
 
     def __init__(self, provider: object, model: str, max_output_tokens: int) -> None:
         self._provider = provider
         self._model = model
         self._max_output_tokens = max_output_tokens
+
+    def batch(self, *args: object, **kwargs: object) -> NoReturn:
+        raise NotImplementedError(
+            "AgentCLIChatModel supports only invoke/ainvoke/with_structured_output; "
+            "batch() is not available for CLI providers."
+        )
+
+    def stream(self, *args: object, **kwargs: object) -> NoReturn:
+        raise NotImplementedError(
+            "AgentCLIChatModel supports only invoke/ainvoke/with_structured_output; "
+            "stream() is not available for CLI providers."
+        )
 
     def invoke(self, prompt: str) -> _AgentCLIMessage:
         text = self._provider.complete(  # type: ignore[attr-defined]
