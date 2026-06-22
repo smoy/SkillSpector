@@ -35,7 +35,7 @@ from rich.console import Console
 from skillspector import __version__
 from skillspector.graph import graph
 from skillspector.logging_config import get_logger, set_level
-from skillspector.multi_skill import detect_skills
+from skillspector.multi_skill import MultiSkillDetectionResult, detect_skills
 
 logger = get_logger(__name__)
 
@@ -177,7 +177,7 @@ def scan(
         typer.Option(
             "--recursive",
             "-r",
-            help="Scan multi-skill directories: detect sub-skills and scan each independently.",
+            help="Scan directories containing multiple skills (immediate subdirectories with SKILL.md) independently.",
         ),
     ] = False,
     verbose: Annotated[
@@ -291,7 +291,7 @@ def _build_trace_config(input_path: str, format: FormatChoice, no_llm: bool) -> 
 
 
 def _scan_multi_skill(
-    detection: object,
+    detection: MultiSkillDetectionResult,
     format: FormatChoice,
     output: Path | None,
     no_llm: bool,
@@ -299,9 +299,6 @@ def _scan_multi_skill(
     verbose: bool,
 ) -> None:
     """Scan each detected sub-skill independently and produce a combined report."""
-    from skillspector.multi_skill import MultiSkillDetectionResult
-
-    assert isinstance(detection, MultiSkillDetectionResult)
     skills = detection.skills
     console.print(f"[bold]Multi-skill directory detected:[/bold] {len(skills)} skills found\n")
 
@@ -327,8 +324,6 @@ def _scan_multi_skill(
         except Exception as e:
             console.print(f"         [red]Error:[/red] {e}\n")
             results.append({"skill_name": skill.name, "error": str(e)})
-        finally:
-            pass
 
     console.print("\n[bold]═══ Multi-Skill Summary ═══[/bold]\n")
     console.print(f"  {'Skill':<30} {'Score':<8} {'Severity':<12} {'Findings':<10}")
@@ -340,8 +335,8 @@ def _scan_multi_skill(
             continue
         score = result.get("risk_score", 0)
         severity = result.get("risk_severity", "LOW")
-        findings = result.get("findings")
-        finding_count = len(findings) if isinstance(findings, list) else 0
+        filtered = result.get("filtered_findings") or result.get("findings")
+        finding_count = len(filtered) if isinstance(filtered, list) else 0
         console.print(f"  {skill.name:<30} {score:<8} {severity:<12} {finding_count:<10}")
 
     console.print("")
@@ -363,7 +358,9 @@ def _scan_multi_skill(
                         "path": skill.relative_path,
                         "risk_score": result.get("risk_score", 0),
                         "risk_severity": result.get("risk_severity", "LOW"),
-                        "finding_count": len(result.get("findings") or []),
+                        "finding_count": len(
+                            result.get("filtered_findings") or result.get("findings") or []
+                        ),
                     }
                 )
         Path(output).write_text(json.dumps(combined, indent=2), encoding="utf-8")
