@@ -25,12 +25,22 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from langchain_core.language_models.chat_models import BaseChatModel
+
 from skillspector.providers import registry
+from skillspector.providers.chat_models import create_openai_compatible_chat_model
 
 # Documented for completeness — ChatOpenAI defaults here when base_url=None.
 OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
 REGISTRY_PATH = str(Path(__file__).with_name("model_registry.yaml"))
+
+
+def _resolve_openai_project_headers() -> dict[str, str] | None:
+    project_id = os.environ.get("OPENAI_PROJECT_ID", "").strip()
+    if not project_id:
+        return None
+    return {"OpenAI-Project": project_id}
 
 
 class OpenAIProvider:
@@ -46,6 +56,22 @@ class OpenAIProvider:
             return None
         base_url = os.environ.get("OPENAI_BASE_URL", "").strip() or None
         return api_key, base_url
+
+    def create_chat_model(
+        self,
+        model: str,
+        *,
+        max_tokens: int,
+        timeout: float | None = 120,
+    ) -> BaseChatModel | None:
+        """Create ``ChatOpenAI`` using standard OpenAI environment variables."""
+        return create_openai_compatible_chat_model(
+            model=model,
+            credentials=self.resolve_credentials(),
+            max_tokens=max_tokens,
+            timeout=timeout,
+            default_headers=_resolve_openai_project_headers(),
+        )
 
     def get_context_length(self, model: str) -> int | None:
         return registry.lookup_context_length(REGISTRY_PATH, model)

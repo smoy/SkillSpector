@@ -17,9 +17,11 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from skillspector.llm_analyzer_base import (
     Batch,
@@ -164,6 +166,16 @@ def _mock_get_chat_model(*_args, **_kwargs):
 MOCK_PATCH_TARGET = "skillspector.llm_analyzer_base.get_chat_model"
 
 
+class _RawTextAnalyzer(LLMAnalyzerBase):
+    """Test analyzer for raw-string mode."""
+
+    response_schema = None
+
+    def parse_response(self, response: object, batch: Batch) -> list[str]:
+        assert isinstance(response, str)
+        return [response]
+
+
 # ---------------------------------------------------------------------------
 # number_lines
 # ---------------------------------------------------------------------------
@@ -287,6 +299,40 @@ class TestBaseParseResponse:
 
 
 # ---------------------------------------------------------------------------
+# MetaAnalyzerResult — tolerate LLMs that stringify the `findings` array
+# ---------------------------------------------------------------------------
+
+
+class TestMetaAnalyzerResultFindingsValidator:
+    _FINDING = {
+        "pattern_id": "E2",
+        "start_line": 12,
+        "is_vulnerability": True,
+        "confidence": 0.9,
+        "intent": "malicious",
+        "impact": "high",
+    }
+
+    def test_findings_as_json_string(self) -> None:
+        """Some LLMs return the findings array as a JSON string, not a list."""
+        result = MetaAnalyzerResult.model_validate({"findings": json.dumps([self._FINDING])})
+        assert len(result.findings) == 1
+        assert result.findings[0].pattern_id == "E2"
+
+    def test_findings_as_native_list(self) -> None:
+        result = MetaAnalyzerResult.model_validate({"findings": [self._FINDING]})
+        assert len(result.findings) == 1
+
+    def test_findings_invalid_string_yields_empty(self) -> None:
+        result = MetaAnalyzerResult.model_validate({"findings": "not json"})
+        assert result.findings == []
+
+    def test_findings_non_list_json_yields_empty(self) -> None:
+        result = MetaAnalyzerResult.model_validate({"findings": json.dumps({"a": 1})})
+        assert result.findings == []
+
+
+# ---------------------------------------------------------------------------
 # LLMAnalyzerBase.collect_findings
 # ---------------------------------------------------------------------------
 
@@ -311,6 +357,35 @@ class TestCollectFindings:
     def test_empty_results(self) -> None:
         analyzer = LLMAnalyzerBase(base_prompt="test", model=self.MODEL)
         assert analyzer.collect_findings([]) == []
+
+
+# ---------------------------------------------------------------------------
+# LLMAnalyzerBase raw-string mode
+# ---------------------------------------------------------------------------
+
+
+class TestRawStringMode:
+    MODEL = "nvidia/openai/gpt-oss-120b"
+
+    @patch(MOCK_PATCH_TARGET, _mock_get_chat_model)
+    def test_run_batches_uses_message_text_for_content_blocks(self) -> None:
+        analyzer = _RawTextAnalyzer(base_prompt="test", model=self.MODEL)
+        analyzer._llm.invoke.return_value = AIMessage(content=[{"type": "text", "text": "chunk"}])
+
+        results = analyzer.run_batches([Batch(file_path="a.py", content="code")])
+
+        assert results[0][1] == ["chunk"]
+
+    @patch(MOCK_PATCH_TARGET, _mock_get_chat_model)
+    async def test_arun_batches_uses_message_text_for_content_blocks(self) -> None:
+        analyzer = _RawTextAnalyzer(base_prompt="test", model=self.MODEL)
+        analyzer._llm.ainvoke = AsyncMock(
+            return_value=AIMessage(content=[{"type": "text", "text": "async chunk"}])
+        )
+
+        results = await analyzer.arun_batches([Batch(file_path="a.py", content="code")])
+
+        assert results[0][1] == ["async chunk"]
 
 
 # ---------------------------------------------------------------------------
@@ -407,9 +482,7 @@ class TestARunBatches:
         """When response_schema is None, arun_batches uses _llm.ainvoke."""
         analyzer = LLMAnalyzerBase(base_prompt="test", model=self.MODEL)
         analyzer._structured_llm = None
-        mock_response = MagicMock()
-        mock_response.content = "raw text"
-        analyzer._llm.ainvoke = AsyncMock(return_value=mock_response)
+        analyzer._llm.ainvoke = AsyncMock(return_value=AIMessage(content="raw text"))
 
         batch = Batch(file_path="a.py", content="code")
         with pytest.raises(NotImplementedError):
@@ -520,6 +593,17 @@ class TestARunBatches:
         with pytest.raises(ValueError, match="no API key"):
             await analyzer.arun_batches(batches)
 
+    @patch(MOCK_PATCH_TARGET, _mock_get_chat_model)
+    async def test_cancelled_error_still_propagates(self) -> None:
+        """Cooperative cancellation must not be treated as a transient batch failure."""
+        import asyncio
+
+        analyzer = LLMAnalyzerBase(base_prompt="test", model=self.MODEL)
+        analyzer._structured_llm.ainvoke = AsyncMock(side_effect=asyncio.CancelledError())
+        batches = [Batch(file_path="a.py", content="code")]
+        with pytest.raises(asyncio.CancelledError):
+            await analyzer.arun_batches(batches)
+
 
 # ---------------------------------------------------------------------------
 # _format_findings_for_prompt (per-file, no truncation)
@@ -564,14 +648,32 @@ class TestLLMAnalysisResult:
         assert len(result.findings) == 1
         assert result.findings[0].confidence == 0.9
 
+    def test_confidence_100_scale_normalized(self) -> None:
+        """Ollama and some models return confidence on 0-100 scale; must be normalized."""
+        f = LLMFinding(rule_id="X", message="x", severity="LOW", start_line=1, confidence=100)
+        assert f.confidence == pytest.approx(1.0)
+
+    def test_confidence_85_scale_normalized(self) -> None:
+        f = LLMFinding(rule_id="X", message="x", severity="LOW", start_line=1, confidence=85)
+        assert f.confidence == pytest.approx(0.85)
+
+    def test_confidence_negative_clamped_to_zero(self) -> None:
+        f = LLMFinding(rule_id="X", message="x", severity="LOW", start_line=1, confidence=-10)
+        assert f.confidence == pytest.approx(0.0)
+
+    def test_confidence_overlarge_clamped_to_one(self) -> None:
+        """Values > 100 (e.g. 150) are divided then clamped."""
+        f = LLMFinding(rule_id="X", message="x", severity="LOW", start_line=1, confidence=150)
+        assert f.confidence == pytest.approx(1.0)
+
     def test_confidence_validation(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises((ValueError, TypeError)):
             LLMFinding(
                 rule_id="X",
                 message="x",
                 severity="LOW",
                 start_line=1,
-                confidence=1.5,
+                confidence="not-a-number",
             )
 
     def test_severity_validation(self) -> None:
@@ -658,12 +760,31 @@ class TestMetaAnalyzerResult:
         assert len(result.findings) == 1
         assert result.findings[0].confidence == 0.9
 
+    def test_confidence_100_scale_normalized(self) -> None:
+        """Ollama-style 0-100 scale must be normalized to 0-1."""
+        f = MetaAnalyzerFinding(
+            pattern_id="E1", is_vulnerability=True, confidence=100, intent="malicious", impact="high"
+        )
+        assert f.confidence == pytest.approx(1.0)
+
+    def test_confidence_75_scale_normalized(self) -> None:
+        f = MetaAnalyzerFinding(
+            pattern_id="E1", is_vulnerability=True, confidence=75, intent="malicious", impact="high"
+        )
+        assert f.confidence == pytest.approx(0.75)
+
+    def test_confidence_negative_clamped(self) -> None:
+        f = MetaAnalyzerFinding(
+            pattern_id="E1", is_vulnerability=True, confidence=-5, intent="malicious", impact="high"
+        )
+        assert f.confidence == pytest.approx(0.0)
+
     def test_confidence_validation(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises((ValueError, TypeError)):
             MetaAnalyzerFinding(
                 pattern_id="E1",
                 is_vulnerability=True,
-                confidence=1.5,
+                confidence="bad",
                 intent="malicious",
                 impact="high",
             )
@@ -715,6 +836,56 @@ class TestMetaAnalyzerResult:
         assert d["confidence"] == 0.8
         assert d["explanation"] == ""
         assert d["start_line"] is None
+
+
+class TestStructuredOutputSchema:
+    """The response schemas must stay portable across structured-output backends.
+
+    Pydantic ge/le bounds emit JSON-schema ``minimum`` / ``maximum``, which some
+    OpenAI-compatible structured-output / tool-calling endpoints reject when they
+    validate the response schema. The ranges are enforced by runtime validators
+    instead, so these keywords must not appear in the emitted schema.
+    """
+
+    @staticmethod
+    def _numeric_keywords(schema: dict) -> set[str]:
+        found: set[str] = set()
+
+        def walk(node: object) -> None:
+            if isinstance(node, dict):
+                found.update(k for k in ("minimum", "maximum") if k in node)
+                for value in node.values():
+                    walk(value)
+            elif isinstance(node, list):
+                for value in node:
+                    walk(value)
+
+        walk(schema)
+        return found
+
+    def test_llm_finding_schema_has_no_numeric_bounds(self) -> None:
+        assert self._numeric_keywords(LLMFinding.model_json_schema()) == set()
+
+    def test_meta_finding_schema_has_no_numeric_bounds(self) -> None:
+        assert self._numeric_keywords(MetaAnalyzerFinding.model_json_schema()) == set()
+
+    def test_llm_finding_normalizes_confidence(self) -> None:
+        # Values > 1.0 are treated as 0-100 scale and rescaled: 85 → 0.85
+        hi = LLMFinding(rule_id="R", message="m", severity="LOW", start_line=1, confidence=85)
+        # Negative values are clamped to 0.0
+        lo = LLMFinding(rule_id="R", message="m", severity="LOW", start_line=1, confidence=-0.3)
+        assert hi.confidence == pytest.approx(0.85)
+        assert lo.confidence == 0.0
+
+    def test_llm_finding_clamps_start_line(self) -> None:
+        assert LLMFinding(rule_id="R", message="m", severity="LOW", start_line=0).start_line == 1
+        assert LLMFinding(rule_id="R", message="m", severity="LOW", start_line=42).start_line == 42
+
+    def test_llm_finding_start_line_is_required(self) -> None:
+        """start_line stays required: a finding with no location is rejected,
+        not materialised at line 1."""
+        with pytest.raises(ValueError):
+            LLMFinding(rule_id="R", message="m", severity="LOW")
 
 
 # ---------------------------------------------------------------------------
