@@ -128,7 +128,18 @@ _TAG_BLOCK = (0xE0000, 0xE007F)
 # subdivision flags: an emoji base U+1F3F4 followed by tag chars and terminated
 # by U+E007F CANCEL TAG — e.g. the Scotland/Wales/England flags). Strip
 # well-formed sequences before flagging so those emoji are not false positives.
-_EMOJI_TAG_SEQUENCE = re.compile("\U0001f3f4[\U000e0020-\U000e007e]+\U000e007f")
+#
+# The carve-out is deliberately narrow: the tag payload must be a short
+# ISO-3166-2-style subdivision code, i.e. 2–6 tag characters that each map to a
+# lowercase ASCII letter (U+E0061–U+E007A) or digit (U+E0030–U+E0039). The only
+# RGI-recommended values are "gbeng"/"gbsct"/"gbwls", and Unicode caps
+# subdivision codes at 6 chars, so this admits every real flag. A smuggled ASCII
+# instruction lands in U+E0020–U+E007E and contains spaces, ';', '/', uppercase,
+# or simply runs longer than 6 chars — none of which match here — so wrapping a
+# payload as 🏴 <tags> U+E007F can no longer launder it past detection.
+_EMOJI_TAG_SEQUENCE = re.compile(
+    "\U0001f3f4[\U000e0030-\U000e0039\U000e0061-\U000e007a]{2,6}\U000e007f"
+)
 
 
 def _first_smuggled_tag_offset(content: str) -> int | None:
