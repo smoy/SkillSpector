@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -295,6 +296,40 @@ class TestBaseParseResponse:
         batch = Batch(file_path="a.py", content="code")
         with pytest.raises(NotImplementedError):
             analyzer.parse_response("raw string", batch)
+
+
+# ---------------------------------------------------------------------------
+# MetaAnalyzerResult — tolerate LLMs that stringify the `findings` array
+# ---------------------------------------------------------------------------
+
+
+class TestMetaAnalyzerResultFindingsValidator:
+    _FINDING = {
+        "pattern_id": "E2",
+        "start_line": 12,
+        "is_vulnerability": True,
+        "confidence": 0.9,
+        "intent": "malicious",
+        "impact": "high",
+    }
+
+    def test_findings_as_json_string(self) -> None:
+        """Some LLMs return the findings array as a JSON string, not a list."""
+        result = MetaAnalyzerResult.model_validate({"findings": json.dumps([self._FINDING])})
+        assert len(result.findings) == 1
+        assert result.findings[0].pattern_id == "E2"
+
+    def test_findings_as_native_list(self) -> None:
+        result = MetaAnalyzerResult.model_validate({"findings": [self._FINDING]})
+        assert len(result.findings) == 1
+
+    def test_findings_invalid_string_yields_empty(self) -> None:
+        result = MetaAnalyzerResult.model_validate({"findings": "not json"})
+        assert result.findings == []
+
+    def test_findings_non_list_json_yields_empty(self) -> None:
+        result = MetaAnalyzerResult.model_validate({"findings": json.dumps({"a": 1})})
+        assert result.findings == []
 
 
 # ---------------------------------------------------------------------------
@@ -754,6 +789,56 @@ class TestMetaAnalyzerResult:
         assert d["confidence"] == 0.8
         assert d["explanation"] == ""
         assert d["start_line"] is None
+
+
+class TestStructuredOutputSchema:
+    """The response schemas must stay portable across structured-output backends.
+
+    Pydantic ge/le bounds emit JSON-schema ``minimum`` / ``maximum``, which some
+    OpenAI-compatible structured-output / tool-calling endpoints reject when they
+    validate the response schema. The ranges are enforced by runtime validators
+    instead, so these keywords must not appear in the emitted schema.
+    """
+
+    @staticmethod
+    def _numeric_keywords(schema: dict) -> set[str]:
+        found: set[str] = set()
+
+        def walk(node: object) -> None:
+            if isinstance(node, dict):
+                found.update(k for k in ("minimum", "maximum") if k in node)
+                for value in node.values():
+                    walk(value)
+            elif isinstance(node, list):
+                for value in node:
+                    walk(value)
+
+        walk(schema)
+        return found
+
+    def test_llm_finding_schema_has_no_numeric_bounds(self) -> None:
+        assert self._numeric_keywords(LLMFinding.model_json_schema()) == set()
+
+    def test_meta_finding_schema_has_no_numeric_bounds(self) -> None:
+        assert self._numeric_keywords(MetaAnalyzerFinding.model_json_schema()) == set()
+
+    def test_llm_finding_normalizes_confidence(self) -> None:
+        # Values > 1.0 are treated as 0-100 scale and rescaled: 85 → 0.85
+        hi = LLMFinding(rule_id="R", message="m", severity="LOW", start_line=1, confidence=85)
+        # Negative values are clamped to 0.0
+        lo = LLMFinding(rule_id="R", message="m", severity="LOW", start_line=1, confidence=-0.3)
+        assert hi.confidence == pytest.approx(0.85)
+        assert lo.confidence == 0.0
+
+    def test_llm_finding_clamps_start_line(self) -> None:
+        assert LLMFinding(rule_id="R", message="m", severity="LOW", start_line=0).start_line == 1
+        assert LLMFinding(rule_id="R", message="m", severity="LOW", start_line=42).start_line == 42
+
+    def test_llm_finding_start_line_is_required(self) -> None:
+        """start_line stays required: a finding with no location is rejected,
+        not materialised at line 1."""
+        with pytest.raises(ValueError):
+            LLMFinding(rule_id="R", message="m", severity="LOW")
 
 
 # ---------------------------------------------------------------------------

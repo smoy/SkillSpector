@@ -30,6 +30,15 @@ SkillSpector helps you answer: **"Is this skill safe to install?"**
 
 Create and activate a virtual environment first (all `make` targets assume the venv is active). Use **uv** or **pip**; the Makefile uses `uv` if available, otherwise `pip`.
 
+**Quick install with uv (no clone required):**
+
+```bash
+uv tool install git+https://github.com/NVIDIA/skillspector.git
+# Update later: uv tool update skillspector
+```
+
+**From source:**
+
 ```bash
 # Clone the repository
 git clone https://github.com/NVIDIA/skillspector.git
@@ -148,6 +157,7 @@ inference gateways.
 | ---------- | ---- | ---- | ---- |
 | `openai` | `OPENAI_API_KEY` (+ optional `OPENAI_BASE_URL`) | api.openai.com (or any OpenAI-compatible URL) | `gpt-5.4` |
 | `anthropic` | `ANTHROPIC_API_KEY` | api.anthropic.com | `claude-opus-4-6` |
+| `anthropic_proxy` | `ANTHROPIC_PROXY_API_KEY` + `ANTHROPIC_PROXY_ENDPOINT_URL` | Any Vertex-style raw-predict proxy | `claude-sonnet-4-6` |
 | `nv_build` | `NVIDIA_INFERENCE_KEY` | build.nvidia.com | `deepseek-ai/deepseek-v4-flash` |
 
 ```bash
@@ -159,6 +169,13 @@ skillspector scan ./my-skill/
 # Anthropic
 export SKILLSPECTOR_PROVIDER=anthropic
 export ANTHROPIC_API_KEY=sk-ant-...
+skillspector scan ./my-skill/
+
+# Anthropic via Vertex-style proxy (corporate gateways, GCP Vertex AI)
+export SKILLSPECTOR_PROVIDER=anthropic_proxy
+export ANTHROPIC_PROXY_ENDPOINT_URL=https://my-gateway.example.com/models/claude-sonnet-4-6:streamRawPredict
+export ANTHROPIC_PROXY_API_KEY=your-bearer-token
+export SKILLSPECTOR_MODEL=claude-sonnet-4-6
 skillspector scan ./my-skill/
 
 # NVIDIA build.nvidia.com
@@ -401,6 +418,9 @@ Issues (2)
 | `OPENAI_API_KEY` | Credential for the OpenAI provider (`SKILLSPECTOR_PROVIDER=openai`). Also serves as the tier-2 fallback in the credential waterfall when the active provider returns no credentials. | Required for LLM analysis when `SKILLSPECTOR_PROVIDER=openai` |
 | `OPENAI_BASE_URL` | Override the OpenAI endpoint (e.g. point at Ollama). | Optional |
 | `ANTHROPIC_API_KEY` | Credential for the Anthropic provider (`SKILLSPECTOR_PROVIDER=anthropic`). | Required for LLM analysis when `SKILLSPECTOR_PROVIDER=anthropic` |
+| `ANTHROPIC_PROXY_ENDPOINT_URL` | Full endpoint URL for the Anthropic proxy provider (Vertex-style raw-predict). | Required when `SKILLSPECTOR_PROVIDER=anthropic_proxy` |
+| `ANTHROPIC_PROXY_API_KEY` | Bearer token for the Anthropic proxy provider. | Required when `SKILLSPECTOR_PROVIDER=anthropic_proxy` |
+| `ANTHROPIC_PROXY_API_VERSION` | `anthropic_version` value sent in the request body (default: `vertex-2023-10-16`). | Optional |
 | `SKILLSPECTOR_MODEL` | Override the active provider's default model. See the LLM Analysis table for each provider's default. | Optional |
 | `SKILLSPECTOR_MODEL_REGISTRY` | Override the bundled per-provider YAML registry (`src/skillspector/providers/<provider>/model_registry.yaml`) with a custom path. | Optional |
 | `SKILLSPECTOR_LOG_LEVEL` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` (default: `WARNING`). | Optional |
