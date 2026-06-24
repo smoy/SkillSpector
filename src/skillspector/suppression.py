@@ -70,7 +70,14 @@ BASELINE_VERSION = 1
 
 
 def _match_glob(value: str, pattern: str) -> bool:
-    """Case-insensitive glob match; ``**`` is treated as an alias for ``*``."""
+    """Case-insensitive glob match; ``**`` is treated as an alias for ``*``.
+
+    Patterns use :func:`fnmatch.fnmatch` semantics, so ``*``, ``?`` and ``[...]``
+    are treated as glob metacharacters. Rule ids and the messages we match are
+    plain text in practice, but if you ever need to match one of those characters
+    literally, escape it with :func:`fnmatch.translate` / ``[`` brackets rather
+    than relying on literal matching here.
+    """
     normalized = pattern.replace("**", "*")
     return fnmatch.fnmatch(value.lower(), normalized.lower())
 

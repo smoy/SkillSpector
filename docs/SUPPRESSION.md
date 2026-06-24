@@ -51,15 +51,15 @@ rules:                       # human-authored, glob-based, drift-tolerant
   - id: "SQP-1"              # glob over the finding's rule id
     reason: "Trigger-phrase breadth is a description nit, not a vuln"
   - id: "SSD-2"
-    path: "*deploy-topology*/SKILL.md"   # glob over the finding's file
-    message: "*run the exploit*"         # glob over the finding's message
-    reason: "False positive: lab test-workflow trigger phrase"
+    path: "example-skill/SKILL.md"       # glob over the finding's file
+    message: "*example false-positive phrase*"   # glob over the finding's message
+    reason: "False positive: benign trigger phrase, not an instruction"
 
 fingerprints:                # machine-generated, exact
   - hash: "sha256:1a2b3c4d5e6f7081"
     rule_id: "SDI-2"         # informational (for humans reading the file)
-    file: "baas-build-analysis/SKILL.md"
-    reason: "Accepted — first-party env detection"
+    file: "example-skill/SKILL.md"
+    reason: "Accepted — reads its own environment for context"
 ```
 
 ### `rules` — glob suppression

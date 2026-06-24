@@ -549,8 +549,11 @@ def test_report_baseline_suppresses_finding_and_lowers_score() -> None:
     assert result["risk_score"] == 0
     assert result["risk_severity"] == "LOW"
     assert result["risk_recommendation"] == "SAFE"
-    # SARIF excludes suppressed findings.
-    assert result["sarif_report"]["runs"][0]["results"] == []
+    # Suppressed findings stay in SARIF but are marked with `suppressions`
+    # (audit trail) so consumers exclude them from counts.
+    sarif_results = result["sarif_report"]["runs"][0]["results"]
+    assert len(sarif_results) == 1
+    assert sarif_results[0]["suppressions"][0]["kind"] == "external"
     assert len(result["suppressed_findings"]) == 1
 
 

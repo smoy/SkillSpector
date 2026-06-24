@@ -47,6 +47,7 @@ from skillspector.sarif_models import (
     SarifReportingDescriptor,
     SarifResult,
     SarifRun,
+    SarifSuppression,
     SarifTool,
 )
 from skillspector.state import SkillspectorState
@@ -134,7 +135,10 @@ def _compute_risk_score(
     return final_score, severity_band, recommendation
 
 
-def _build_sarif(findings: list[Finding]) -> dict[str, object]:
+def _build_sarif(
+    findings: list[Finding],
+    suppressed: list[SuppressedFinding] | None = None,
+) -> dict[str, object]:
     """Build SARIF 2.1.0 log from findings.
 
     Filters out empty/malformed findings (missing rule_id or message) and
@@ -162,6 +166,33 @@ def _build_sarif(findings: list[Finding]) -> dict[str, object]:
                         )
                     )
                 ],
+            )
+        )
+        if finding.rule_id not in seen_rule_ids:
+            seen_rule_ids[finding.rule_id] = finding.message
+
+    # Baseline-suppressed findings are kept in the SARIF for an audit trail, but
+    # marked with the `suppressions` property so consumers exclude them from counts.
+    for sf in suppressed or []:
+        finding = sf.finding
+        if not finding.rule_id or not finding.message:
+            continue
+        results.append(
+            SarifResult(
+                rule_id=finding.rule_id,
+                message=SarifMessage(text=finding.message),
+                level=_severity_to_sarif_level(finding.severity),
+                locations=[
+                    SarifLocation(
+                        physical_location=SarifPhysicalLocation(
+                            artifact_location=SarifArtifactLocation(uri=finding.file),
+                            region=SarifRegion(
+                                start_line=finding.start_line, end_line=finding.end_line
+                            ),
+                        )
+                    )
+                ],
+                suppressions=[SarifSuppression(kind="external", justification=sf.reason)],
             )
         )
         if finding.rule_id not in seen_rule_ids:
@@ -523,7 +554,7 @@ def report(state: SkillspectorState) -> dict[str, object]:
     risk_score, risk_severity, risk_recommendation = _compute_risk_score(
         findings_for_scoring, has_executable_scripts
     )
-    sarif_report = _build_sarif(active_findings)
+    sarif_report = _build_sarif(active_findings, suppressed)
     analysis_completeness = _build_analysis_completeness(
         components, file_cache, use_llm, raw_findings, filtered_findings
     )
