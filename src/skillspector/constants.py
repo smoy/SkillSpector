@@ -36,7 +36,7 @@ _provider = get_metadata_provider()
 
 # Exposed for analyzers that need a final fallback symbol (e.g.,
 # ``model = state.model or MODEL_CONFIG[ANALYZER_ID] or _SKILLSPECTOR_DEFAULT_MODEL``).
-_SKILLSPECTOR_DEFAULT_MODEL = _provider.DEFAULT_MODEL  # type: ignore[attr-defined]
+_SKILLSPECTOR_DEFAULT_MODEL = _provider.DEFAULT_MODEL
 
 _MODEL_SLOTS: tuple[str, ...] = (
     "default",
