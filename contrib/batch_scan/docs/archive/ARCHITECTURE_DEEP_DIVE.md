@@ -260,7 +260,7 @@ SKILLSPECTOR_PROVIDER env var
 The contrib layer sits entirely outside upstream. It imports upstream classes as parents and wraps upstream functions:
 
 ```
-contrib/multilingual/
+contrib/batch_scan/
 ├── batch_scan.py      ← CLI + ThreadPoolExecutor
 ├── runner.py          ← graph.invoke() wrapper + 7 safety patches
 ├── gap_fill.py        ← GapFillAnalyzer(LLMAnalyzerBase)

@@ -40,9 +40,9 @@ alike.  The pool is wired in via :func:`~.runner.set_api_pool` (monkey-patches
 
 Usage::
 
-    python -m contrib.multilingual.batch_scan ./skills/ --no-llm
-    python -m contrib.multilingual.batch_scan ./skills/ -f json -o report.json
-    python -m contrib.multilingual.batch_scan ./skills/ --lang zh --workers 8
+    python -m contrib.batch_scan.batch_scan ./skills/ --no-llm
+    python -m contrib.batch_scan.batch_scan ./skills/ -f json -o report.json
+    python -m contrib.batch_scan.batch_scan ./skills/ --lang zh --workers 8
 """
 
 from __future__ import annotations

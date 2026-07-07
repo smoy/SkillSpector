@@ -43,7 +43,7 @@ def mutate(label: str, module: str, target: str, broken_fn, test_specs: list[tup
     try:
         for test_mod, test_cls in test_specs:
             suite = unittest.TestLoader().loadTestsFromName(
-                f"contrib.multilingual.tests.tests-pro.{test_mod}.{test_cls}"
+                f"contrib.batch_scan.tests.tests-pro.{test_mod}.{test_cls}"
             )
             r = unittest.TextTestRunner(verbosity=0).run(suite)
             caught = not r.wasSuccessful()
@@ -57,7 +57,7 @@ def mutate(label: str, module: str, target: str, broken_fn, test_specs: list[tup
 # ═══════════════════════════════════════════════════════════════════════
 
 # Mutation 1a: acquire forgets to increment active_requests
-import contrib.multilingual.api_pool as _ap
+import contrib.batch_scan.api_pool as _ap
 _orig_acquire = _ap.ApiKeyPool.acquire
 
 
@@ -82,7 +82,7 @@ def _broken_acquire_no_increment(self, timeout=None):
 
 
 _ap.ApiKeyPool.acquire = _broken_acquire_no_increment
-mutate("acquire forgets active_requests++", "contrib.multilingual.api_pool",
+mutate("acquire forgets active_requests++", "contrib.batch_scan.api_pool",
        "ApiKeyPool.acquire", _broken_acquire_no_increment,
        [("test_api_pool", "TestAcquireRelease")])
 _ap.ApiKeyPool.acquire = _orig_acquire
@@ -107,7 +107,7 @@ def _broken_release_no_decrement(self, key, *, success=True):
 
 
 _ap.ApiKeyPool.release = _broken_release_no_decrement
-mutate("release forgets active_requests--", "contrib.multilingual.api_pool",
+mutate("release forgets active_requests--", "contrib.batch_scan.api_pool",
        "ApiKeyPool.release", _broken_release_no_decrement,
        [("test_api_pool", "TestAcquireRelease"),
         ("test_api_pool", "TestResourceLeakRecovery")])
@@ -143,7 +143,7 @@ def _broken_acquire_no_load_balance(self, timeout=None):
 
 
 _ap.ApiKeyPool.acquire = _broken_acquire_no_load_balance
-mutate("least-loaded scheduling broken", "contrib.multilingual.api_pool",
+mutate("least-loaded scheduling broken", "contrib.batch_scan.api_pool",
        "ApiKeyPool.acquire", _broken_acquire_no_load_balance,
        [("test_api_pool", "TestEdgeCases")])  # test_released_slot_returns_least_loaded_key
 _ap.ApiKeyPool.acquire = _orig_acquire2
@@ -169,7 +169,7 @@ def _broken_try_acquire(self):
 
 
 _ap.ApiKeyPool.try_acquire = _broken_try_acquire
-mutate("try_acquire recovery broken", "contrib.multilingual.api_pool",
+mutate("try_acquire recovery broken", "contrib.batch_scan.api_pool",
        "ApiKeyPool.try_acquire", _broken_try_acquire,
        [("test_api_pool", "TestRecoveredKeyScheduling")])
 _ap.ApiKeyPool.try_acquire = _orig_try_acquire
@@ -197,7 +197,7 @@ def _broken_release_fixed_backoff(self, key, *, success=True):
 
 
 _ap.ApiKeyPool.release = _broken_release_fixed_backoff
-mutate("backoff always 5s", "contrib.multilingual.api_pool",
+mutate("backoff always 5s", "contrib.batch_scan.api_pool",
        "ApiKeyPool.release", _broken_release_fixed_backoff,
        [("test_api_pool", "TestRateLimitBackoff")])
 _ap.ApiKeyPool.release = _orig_release2
@@ -211,7 +211,7 @@ def _broken_recover(self, now):
 
 
 _ap.ApiKeyPool._recover_expired_keys = _broken_recover
-mutate("recovery never runs", "contrib.multilingual.api_pool",
+mutate("recovery never runs", "contrib.batch_scan.api_pool",
        "ApiKeyPool._recover_expired_keys", _broken_recover,
        [("test_api_pool", "TestRateLimitBackoff")])  # TestRecoveredKeyScheduling hangs: acquire() blocks forever w/o recovery
 _ap.ApiKeyPool._recover_expired_keys = _orig_recover
@@ -221,7 +221,7 @@ _ap.ApiKeyPool._recover_expired_keys = _orig_recover
 # ═══════════════════════════════════════════════════════════════════════
 
 # Mutation 3a: Patch 1 broken — doesn't set response_schema=None
-import contrib.multilingual.runner as _runner
+import contrib.batch_scan.runner as _runner
 
 _orig_patched_init = _runner._patched_base_init
 
@@ -266,7 +266,7 @@ def _broken_apply_no_patch1():
 
 
 _runner._apply_patches = _broken_apply_no_patch1
-mutate("Patch 1 not applied", "contrib.multilingual.runner",
+mutate("Patch 1 not applied", "contrib.batch_scan.runner",
        "_apply_patches", _broken_apply_no_patch1,
        [("test_runner_patches", "TestContextManagerApplyRestore")])
 _runner._apply_patches = _orig_apply
@@ -281,7 +281,7 @@ def _broken_co_init(self, **kwargs):
 
 
 _runner._patched_chatopenai_init = _broken_co_init
-mutate("Patch 6 no timeout", "contrib.multilingual.runner",
+mutate("Patch 6 no timeout", "contrib.batch_scan.runner",
        "_patched_chatopenai_init", _broken_co_init,
        [("test_runner_patches", "TestPatch6ChatOpenAITimeout")])
 _runner._patched_chatopenai_init = _orig_patched_co
@@ -290,7 +290,7 @@ _runner._patched_chatopenai_init = _orig_patched_co
 # Area 4: GapFillAnalyzer.parse_response
 # ═══════════════════════════════════════════════════════════════════════
 
-import contrib.multilingual.gap_fill as _gf
+import contrib.batch_scan.gap_fill as _gf
 
 # Mutation 4a: confidence filter broken — threshold 0.7 → 0.0
 _orig_parse = _gf.GapFillAnalyzer.parse_response
@@ -324,7 +324,7 @@ def _broken_parse_no_filter(self, response, batch):
 
 # Apply directly to class since mutation test targets the class method
 _gf.GapFillAnalyzer.parse_response = _broken_parse_no_filter
-mutate("confidence filter removed", "contrib.multilingual.gap_fill",
+mutate("confidence filter removed", "contrib.batch_scan.gap_fill",
        "GapFillAnalyzer.parse_response", _broken_parse_no_filter,
        [("test_gap_fill", "TestParseResponseFiltering")])
 _gf.GapFillAnalyzer.parse_response = _orig_parse
@@ -351,7 +351,7 @@ def _broken_parse_no_fence_strip(self, response, batch):
 
 
 _gf.GapFillAnalyzer.parse_response = _broken_parse_no_fence_strip
-mutate("fence stripping broken", "contrib.multilingual.gap_fill",
+mutate("fence stripping broken", "contrib.batch_scan.gap_fill",
        "GapFillAnalyzer.parse_response", _broken_parse_no_fence_strip,
        [("test_gap_fill", "TestParseResponseMarkdownFences")])
 _gf.GapFillAnalyzer.parse_response = _orig_parse2
@@ -369,7 +369,7 @@ def _broken_patched_parse(self, response, batch):
 
 _runner._patched_base_parse = _broken_patched_parse
 _runner.LLMAnalyzerBase.parse_response = _broken_patched_parse
-mutate("Patch 2 parse always empty", "contrib.multilingual.runner",
+mutate("Patch 2 parse always empty", "contrib.batch_scan.runner",
        "_patched_base_parse", _broken_patched_parse,
        [("test_runner_patches", "TestContextManagerApplyRestore")])
 _runner._patched_base_parse = _orig_patched_parse
@@ -399,7 +399,7 @@ def _broken_meta_parse(self, response, batch):
 
 _runner._patched_meta_parse = _broken_meta_parse
 _runner.LLMMetaAnalyzer.parse_response = _broken_meta_parse
-mutate("Patch 3 sanitize broken", "contrib.multilingual.runner",
+mutate("Patch 3 sanitize broken", "contrib.batch_scan.runner",
        "_patched_meta_parse", _broken_meta_parse,
        [("test_runner_patches", "TestSanitizeMetaFinding")])
 _runner._patched_meta_parse = _orig_meta_parse
@@ -415,7 +415,7 @@ def _broken_base_build(self, batch, **kwargs):
 
 _runner._patched_base_build_prompt = _broken_base_build
 _runner.LLMAnalyzerBase.build_prompt = _broken_base_build
-mutate("Patch 4 JSON prompt missing", "contrib.multilingual.runner",
+mutate("Patch 4 JSON prompt missing", "contrib.batch_scan.runner",
        "_patched_base_build_prompt", _broken_base_build,
        [("test_runner_patches", "TestContextManagerApplyRestore")])
 _runner._patched_base_build_prompt = _orig_base_build
@@ -430,7 +430,7 @@ def _broken_meta_build(self, batch, **kwargs):
 
 _runner._patched_meta_build_prompt = _broken_meta_build
 _runner.LLMMetaAnalyzer.build_prompt = _broken_meta_build
-mutate("Patch 5 JSON meta prompt missing", "contrib.multilingual.runner",
+mutate("Patch 5 JSON meta prompt missing", "contrib.batch_scan.runner",
        "_patched_meta_build_prompt", _broken_meta_build,
        [("test_runner_patches", "TestContextManagerApplyRestore")])
 _runner._patched_meta_build_prompt = _orig_meta_build
@@ -445,7 +445,7 @@ def _broken_asyncio_run(main, *, debug=None, loop_factory=None):
 
 
 _runner._patched_asyncio_run = _broken_asyncio_run
-mutate("Patch 7 asyncio not patched", "contrib.multilingual.runner",
+mutate("Patch 7 asyncio not patched", "contrib.batch_scan.runner",
        "_patched_asyncio_run", _broken_asyncio_run,
        [("test_runner_patches", "TestPatch7AsyncioQuietLoop")])
 _runner._patched_asyncio_run = _orig_patched_asyncio
@@ -481,7 +481,7 @@ def _broken_parse_no_rule_filter(self, response, batch):
 
 
 _gf.GapFillAnalyzer.parse_response = _broken_parse_no_rule_filter
-mutate("rule_id filter removed", "contrib.multilingual.gap_fill",
+mutate("rule_id filter removed", "contrib.batch_scan.gap_fill",
        "GapFillAnalyzer.parse_response", _broken_parse_no_rule_filter,
        [("test_gap_fill", "TestParseResponseFiltering")])
 _gf.GapFillAnalyzer.parse_response = _orig_parse3
@@ -507,7 +507,7 @@ def _broken_parse_no_json_catch(self, response, batch):
 
 
 _gf.GapFillAnalyzer.parse_response = _broken_parse_no_json_catch
-mutate("JSON decode error not caught", "contrib.multilingual.gap_fill",
+mutate("JSON decode error not caught", "contrib.batch_scan.gap_fill",
        "GapFillAnalyzer.parse_response", _broken_parse_no_json_catch,
        [("test_gap_fill", "TestParseResponseInvalidInput")])
 _gf.GapFillAnalyzer.parse_response = _orig_parse4
@@ -536,7 +536,7 @@ def _broken_parse_no_pydantic_catch(self, response, batch):
 
 
 _gf.GapFillAnalyzer.parse_response = _broken_parse_no_pydantic_catch
-mutate("Pydantic validation error not caught", "contrib.multilingual.gap_fill",
+mutate("Pydantic validation error not caught", "contrib.batch_scan.gap_fill",
        "GapFillAnalyzer.parse_response", _broken_parse_no_pydantic_catch,
        [("test_gap_fill", "TestParseResponseInvalidInput")])
 _gf.GapFillAnalyzer.parse_response = _orig_parse5
@@ -554,7 +554,7 @@ def _broken_next_avail(self, now):
 _ap.ApiKeyPool._next_available_in = _broken_next_avail
 # Note: this mutation can't be directly tested without a rate-limited+full pool scenario
 # which is Q16's blind spot.  Test validates the function exists but not this branch.
-mutate("_next_available_in always None", "contrib.multilingual.api_pool",
+mutate("_next_available_in always None", "contrib.batch_scan.api_pool",
        "ApiKeyPool._next_available_in", _broken_next_avail,
        [])  # No matching test — documented as Q16/Q17 blind spot
 _ap.ApiKeyPool._next_available_in = _orig_next_avail
@@ -579,7 +579,7 @@ def _broken_restore():
 
 
 _runner._restore_patches = _broken_restore
-mutate("_restore_patches skips Patch 6+7", "contrib.multilingual.runner",
+mutate("_restore_patches skips Patch 6+7", "contrib.batch_scan.runner",
        "_restore_patches", _broken_restore,
        [("test_runner_patches", "TestContextManagerApplyRestore")])
 _runner._restore_patches = _orig_restore
@@ -593,7 +593,7 @@ def _broken_verify():
 
 
 _runner._verify_patch_targets = _broken_verify
-mutate("_verify_patch_targets no-op", "contrib.multilingual.runner",
+mutate("_verify_patch_targets no-op", "contrib.batch_scan.runner",
        "_verify_patch_targets", _broken_verify,
        [])  # Q13: no test asserts guard actually ran — documented blind spot
 _runner._verify_patch_targets = _orig_verify
@@ -607,7 +607,7 @@ def _broken_check(func, expected, label, num):
 
 
 _runner._check_signature = _broken_check
-mutate("_check_signature no-op", "contrib.multilingual.runner",
+mutate("_check_signature no-op", "contrib.batch_scan.runner",
        "_check_signature", _broken_check,
        [])  # No test directly calls _check_signature — documented
 _runner._check_signature = _orig_check
@@ -623,7 +623,7 @@ def _broken_set_api(pool):
     import skillspector.llm_utils as _u
     def _bad_wrapper(model=None):
         if _runner._api_pool:
-            from contrib.multilingual.api_pool import PooledChatModel
+            from contrib.batch_scan.api_pool import PooledChatModel
             return PooledChatModel(_runner._api_pool)
         # BUG: fallback calls patched version instead of original
         return _u.get_chat_model(model)
@@ -631,13 +631,13 @@ def _broken_set_api(pool):
 
 
 _runner.set_api_pool = _broken_set_api
-mutate("set_api_pool broken fallback", "contrib.multilingual.runner",
+mutate("set_api_pool broken fallback", "contrib.batch_scan.runner",
        "set_api_pool", _broken_set_api,
        [("test_runner_patches", "TestSetApiPoolRestore")])
 _runner.set_api_pool = _orig_set_api
 
 # Mutation 5f: annotate_findings broken — always returns incompatible
-import contrib.multilingual.annotation as _ann
+import contrib.batch_scan.annotation as _ann
 _orig_annotate = _ann.annotate_findings
 
 
@@ -651,7 +651,7 @@ def _broken_annotate(issues, detected_language):
 
 
 _ann.annotate_findings = _broken_annotate
-mutate("annotate_findings always incompatible", "contrib.multilingual.annotation",
+mutate("annotate_findings always incompatible", "contrib.batch_scan.annotation",
        "annotate_findings", _broken_annotate,
        [("test_annotation", "TestAnnotateFindings")])
 _ann.annotate_findings = _orig_annotate
@@ -665,7 +665,7 @@ def _broken_is_compat(rule_id, detected_language):
 
 
 _ann.is_language_compatible = _broken_is_compat
-mutate("is_language_compatible always True", "contrib.multilingual.annotation",
+mutate("is_language_compatible always True", "contrib.batch_scan.annotation",
        "is_language_compatible", _broken_is_compat,
        [("test_annotation", "TestAnnotateFindings")])
 _ann.is_language_compatible = _orig_is_compat
@@ -683,7 +683,7 @@ def _broken_build_prompt(self, batch, **kwargs):
 
 
 _gf.GapFillAnalyzer.build_prompt = _broken_build_prompt
-mutate("build_prompt missing file content", "contrib.multilingual.gap_fill",
+mutate("build_prompt missing file content", "contrib.batch_scan.gap_fill",
        "GapFillAnalyzer.build_prompt", _broken_build_prompt,
        [("test_gap_fill", "TestBuildPrompt")])
 _gf.GapFillAnalyzer.build_prompt = _orig_build
@@ -697,7 +697,7 @@ def _broken_get_batches(self, file_paths, file_cache, findings=None):
 
 
 _gf.GapFillAnalyzer.get_batches = _broken_get_batches
-mutate("get_batches always empty", "contrib.multilingual.gap_fill",
+mutate("get_batches always empty", "contrib.batch_scan.gap_fill",
        "GapFillAnalyzer.get_batches", _broken_get_batches,
        [("test_gap_fill", "TestGetBatchesAndCollectFindings")])
 _gf.GapFillAnalyzer.get_batches = _orig_batches
@@ -711,7 +711,7 @@ def _broken_collect_findings(self, batch_results):
 
 
 _gf.GapFillAnalyzer.collect_findings = _broken_collect_findings
-mutate("collect_findings always empty", "contrib.multilingual.gap_fill",
+mutate("collect_findings always empty", "contrib.batch_scan.gap_fill",
        "GapFillAnalyzer.collect_findings", _broken_collect_findings,
        [("test_gap_fill", "TestGetBatchesAndCollectFindings")])
 _gf.GapFillAnalyzer.collect_findings = _orig_collect
@@ -725,7 +725,7 @@ def _broken_run_gap_fill(file_cache, language, model=None, api_pool=None):
 
 
 _gf.run_gap_fill = _broken_run_gap_fill
-mutate("run_gap_fill always empty", "contrib.multilingual.gap_fill",
+mutate("run_gap_fill always empty", "contrib.batch_scan.gap_fill",
        "run_gap_fill", _broken_run_gap_fill,
        [("test_gap_fill", "TestRunGapFill")])
 _gf.run_gap_fill = _orig_run_gf
@@ -739,7 +739,7 @@ def _broken_is_rl(exc):
 
 
 _ap.PooledChatModel._is_rate_limit = staticmethod(_broken_is_rl)
-mutate("_is_rate_limit always False", "contrib.multilingual.api_pool",
+mutate("_is_rate_limit always False", "contrib.batch_scan.api_pool",
        "PooledChatModel._is_rate_limit", staticmethod(_broken_is_rl),
        [("test_api_pool", "TestIsRateLimit")])
 _ap.PooledChatModel._is_rate_limit = _orig_is_rl
@@ -753,7 +753,7 @@ def _broken_create_pool(max_concurrent_per_key=5):
 
 
 _ap.create_api_key_pool_from_env = _broken_create_pool
-mutate("create_api_key_pool_from_env always None", "contrib.multilingual.api_pool",
+mutate("create_api_key_pool_from_env always None", "contrib.batch_scan.api_pool",
        "create_api_key_pool_from_env", _broken_create_pool,
        [("test_api_pool", "TestCreateApiKeyPoolFromEnv")])
 _ap.create_api_key_pool_from_env = _orig_create_pool
@@ -774,7 +774,7 @@ def _broken_ds_compat():
 
 
 _runner.deepseek_compat = _broken_ds_compat
-mutate("deepseek_compat no restore on exception", "contrib.multilingual.runner",
+mutate("deepseek_compat no restore on exception", "contrib.batch_scan.runner",
        "deepseek_compat", _broken_ds_compat,
        [("test_runner_patches", "TestContextManagerApplyRestore")])
 _runner.deepseek_compat = _orig_ds_compat

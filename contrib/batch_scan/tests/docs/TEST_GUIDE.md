@@ -1,4 +1,4 @@
-# Test Guide — contrib/multilingual
+# Test Guide — contrib/batch_scan
 
 > **WHAT & WHERE.** Coverage map and quick reference. For design rationale
 > — why each suite exists and how it was designed — see `TEST_DESIGN.md`.
@@ -10,16 +10,16 @@
 
 ```bash
 # All 164 tests
-python contrib/multilingual/tests/tests-pro/random_numbered.py    # 120 unit (seed=42)
-python contrib/multilingual/tests/test_pool_wiring.py              # 4 smoke checks
-python contrib/multilingual/tests/test_monkeypatch_invasiveness.py # 14 thematic
-python contrib/multilingual/tests/test_monkeypatch_fragility.py    # 26 thematic
+python contrib/batch_scan/tests/tests-pro/random_numbered.py    # 120 unit (seed=42)
+python contrib/batch_scan/tests/test_pool_wiring.py              # 4 smoke checks
+python contrib/batch_scan/tests/test_monkeypatch_invasiveness.py # 14 thematic
+python contrib/batch_scan/tests/test_monkeypatch_fragility.py    # 26 thematic
 
 # Review-themed only (44 total)
 python -m unittest \
-  contrib.multilingual.tests.test_monkeypatch_invasiveness \
-  contrib.multilingual.tests.test_monkeypatch_fragility -v
-python contrib/multilingual/tests/test_pool_wiring.py
+  contrib.batch_scan.tests.test_monkeypatch_invasiveness \
+  contrib.batch_scan.tests.test_monkeypatch_fragility -v
+python contrib/batch_scan/tests/test_pool_wiring.py
 ```
 
 ---

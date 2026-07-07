@@ -71,7 +71,7 @@ except ImportError:
 
 from skillspector.llm_analyzer_base import LLMAnalyzerBase
 
-from contrib.multilingual.runner import (
+from contrib.batch_scan.runner import (
     _apply_patches,
     _original_asyncio_run,
     _original_base_build_prompt,
@@ -116,7 +116,7 @@ def _force_restore() -> None:
     Call in tearDown / tearDownClass to prevent test-order leakage when
     random-order runners (random_numbered.py) shuffle test classes.
     """
-    import contrib.multilingual.runner as _runner
+    import contrib.batch_scan.runner as _runner
     while _runner._patches_depth > 0:
         _runner._restore_patches()
 
@@ -127,7 +127,7 @@ def _force_restore() -> None:
 
 
 class TestImportNoSideEffect(unittest.TestCase):
-    """Prove that ``import contrib.multilingual.runner`` does NOT apply patches.
+    """Prove that ``import contrib.batch_scan.runner`` does NOT apply patches.
 
     Reviewer concern: "Import-time global monkey-patching is invasive."
     Resolution: patches fire only via explicit ``deepseek_compat()`` or
@@ -147,7 +147,7 @@ class TestImportNoSideEffect(unittest.TestCase):
                 sys.executable, "-X", "utf8", "-c",
                 "from skillspector.llm_analyzer_base import LLMAnalyzerBase; "
                 "orig = LLMAnalyzerBase.__init__; "
-                "import contrib.multilingual.runner; "
+                "import contrib.batch_scan.runner; "
                 "assert LLMAnalyzerBase.__init__ is orig, 'Import applied patches!'",
             ],
             capture_output=True, text=True, timeout=30,

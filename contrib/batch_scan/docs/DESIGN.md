@@ -8,7 +8,7 @@
 
 ```
 CLI
- │  python -m contrib.multilingual.batch_scan ./tests/fixtures/ --workers 7
+ │  python -m contrib.batch_scan.batch_scan ./tests/fixtures/ --workers 7
  │
  ▼
 batch_scan.py :: main()
@@ -187,7 +187,7 @@ HTTP-level timeouts (Patch 6) prevent most hangs from reaching the 90s ceiling.
 ## File layout
 
 ```
-contrib/multilingual/
+contrib/batch_scan/
 ├── __init__.py          # package init + dotenv preload
 ├── batch_scan.py        # CLI + ThreadPoolExecutor
 ├── runner.py            # graph wrapper + setup_deepseek_compat()

@@ -13,6 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Unit tests for contrib.multilingual — API pool, gap-fill, runner patches, annotation."""
+"""Pytest configuration for contrib.batch_scan tests."""
 
 from __future__ import annotations
+
+import pytest
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Register custom markers for the contrib.batch_scan test suite."""
+    config.addinivalue_line(
+        "markers",
+        "slow: tests that take longer than 5 seconds (e.g. subprocess isolation)",
+    )

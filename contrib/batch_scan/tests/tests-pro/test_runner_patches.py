@@ -65,7 +65,7 @@ except ImportError:
 from skillspector.llm_analyzer_base import LLMAnalyzerBase
 from skillspector.nodes.meta_analyzer import LLMMetaAnalyzer
 
-from contrib.multilingual.runner import (
+from contrib.batch_scan.runner import (
     _original_asyncio_run,
     _original_base_init,
     _original_base_parse,
@@ -243,7 +243,7 @@ class TestSetupFunction(unittest.TestCase):
         """Restore global state mutated by setup_deepseek_compat().
         Calls _restore_patches until depth reaches 0 (setup may be called
         multiple times across test methods)."""
-        import contrib.multilingual.runner as _runner
+        import contrib.batch_scan.runner as _runner
         while _runner._patches_depth > 0:
             _runner._restore_patches()
 
@@ -278,7 +278,7 @@ class TestSetupContextInteraction(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        import contrib.multilingual.runner as _runner
+        import contrib.batch_scan.runner as _runner
         while _runner._patches_depth > 0:
             _runner._restore_patches()
 
@@ -288,7 +288,7 @@ class TestSetupContextInteraction(unittest.TestCase):
         with deepseek_compat():
             self.assertIsNot(LLMAnalyzerBase.__init__, _original_base_init)
         self.assertIsNot(LLMAnalyzerBase.__init__, _original_base_init)
-        from contrib.multilingual.runner import _restore_patches
+        from contrib.batch_scan.runner import _restore_patches
         _restore_patches()
         self.assertIs(LLMAnalyzerBase.__init__, _original_base_init)
 
@@ -311,7 +311,7 @@ class TestImportNoSideEffect(unittest.TestCase):
                 sys.executable, "-X", "utf8", "-c",
                 "from skillspector.llm_analyzer_base import LLMAnalyzerBase; "
                 "orig = LLMAnalyzerBase.__init__; "
-                "import contrib.multilingual.runner; "
+                "import contrib.batch_scan.runner; "
                 "assert LLMAnalyzerBase.__init__ is orig, 'Import applied patches!'",
             ],
             capture_output=True, text=True, timeout=30,
@@ -330,7 +330,7 @@ class TestPatch2OriginalCapture(unittest.TestCase):
 
     def test_original_chatopenai_init_is_captured_at_import_time(self):
         """Verify P2 fix: _original_chatopenai_init is not None after import."""
-        from contrib.multilingual.runner import _original_chatopenai_init
+        from contrib.batch_scan.runner import _original_chatopenai_init
         self.assertIsNotNone(
             _original_chatopenai_init,
             "_original_chatopenai_init should be captured at module-load time",
@@ -341,21 +341,21 @@ class TestCheckSignature(unittest.TestCase):
     """_check_signature() — previously untested."""
 
     def test_check_signature_passes_when_all_params_present(self):
-        from contrib.multilingual.runner import _check_signature
+        from contrib.batch_scan.runner import _check_signature
         def _sample(self, a, b, c):
             pass
         # Should not raise
         _check_signature(_sample, ["self", "a", "b", "c"], "test_func", 99)
 
     def test_check_signature_raises_when_param_missing(self):
-        from contrib.multilingual.runner import _check_signature
+        from contrib.batch_scan.runner import _check_signature
         def _sample(self, a, b):
             pass
         with self.assertRaises(RuntimeError):
             _check_signature(_sample, ["self", "a", "b", "c"], "test_func", 99)
 
     def test_check_signature_raises_when_param_becomes_keyword_only(self):
-        from contrib.multilingual.runner import _check_signature
+        from contrib.batch_scan.runner import _check_signature
         def _sample(self, *, a, b, c):
             pass
         with self.assertRaises(RuntimeError):
@@ -367,7 +367,7 @@ class TestVerifyPatchTargets(unittest.TestCase):
 
     def test_guard_passes_against_current_upstream_version(self):
         """Entering context manager must not raise."""
-        from contrib.multilingual.runner import _verify_patch_targets, _apply_patches
+        from contrib.batch_scan.runner import _verify_patch_targets, _apply_patches
         try:
             _verify_patch_targets()
         except RuntimeError as e:
@@ -441,7 +441,7 @@ class TestPatch7AsyncioQuietLoop(unittest.TestCase):
 
     def test_quiet_loop_handler_suppresses_event_loop_closed_error(self):
         """#C8: Verify _patched_asyncio_run installs quiet handler via loop_factory."""
-        from contrib.multilingual.runner import _patched_asyncio_run, _original_asyncio_run
+        from contrib.batch_scan.runner import _patched_asyncio_run, _original_asyncio_run
         # Create a loop via _patched_asyncio_run — it calls _make_quiet_loop internally
         loop = None
         def _capture_loop():
@@ -575,7 +575,7 @@ class TestSetApiPoolRestore(unittest.TestCase):
 
         original = _llm_utils.get_chat_model
         # Act — wire pool
-        from contrib.multilingual.api_pool import create_api_key_pool_from_env
+        from contrib.batch_scan.api_pool import create_api_key_pool_from_env
         pool = create_api_key_pool_from_env()
         set_api_pool(pool)
         self.assertIsNot(_llm_utils.get_chat_model, original)
@@ -595,14 +595,14 @@ class TestScanState(unittest.TestCase):
     """scan_state() — pure function, previously zero coverage."""
 
     def test_scan_state_returns_correct_keys_with_llm_enabled(self):
-        from contrib.multilingual.runner import scan_state
+        from contrib.batch_scan.runner import scan_state
         state = scan_state(Path("/tmp/test_skill"), use_llm=True)
         self.assertEqual(state["input_path"], str(Path("/tmp/test_skill")))
         self.assertEqual(state["output_format"], "json")
         self.assertTrue(state["use_llm"])
 
     def test_scan_state_returns_correct_keys_with_llm_disabled(self):
-        from contrib.multilingual.runner import scan_state
+        from contrib.batch_scan.runner import scan_state
         state = scan_state(Path("/tmp/test_skill"), use_llm=False)
         self.assertFalse(state["use_llm"])
 
@@ -611,13 +611,13 @@ class TestRelName(unittest.TestCase):
     """_rel_name() — pure function, previously zero coverage."""
 
     def test_rel_name_returns_relative_path_when_skill_is_under_root(self):
-        from contrib.multilingual.runner import _rel_name
+        from contrib.batch_scan.runner import _rel_name
         result = _rel_name(Path("/root/sub/skill"), Path("/root"))
         self.assertIn("sub", result)
         self.assertIn("skill", result)
 
     def test_rel_name_falls_back_to_skill_name_when_unrelated_paths(self):
-        from contrib.multilingual.runner import _rel_name
+        from contrib.batch_scan.runner import _rel_name
         result = _rel_name(Path("/other/skill"), Path("/root"))
         self.assertEqual(result, "skill")
 
@@ -630,7 +630,7 @@ class TestEntryFromResult(unittest.TestCase):
         self.root = Path("/tmp")
 
     def test_entry_from_minimal_result_has_all_required_keys(self):
-        from contrib.multilingual.runner import entry_from_result
+        from contrib.batch_scan.runner import entry_from_result
         result = {"findings": []}
         entry = entry_from_result(result, self.skill_dir, self.root)
         self.assertIn("skill", entry)
@@ -641,20 +641,20 @@ class TestEntryFromResult(unittest.TestCase):
         self.assertIn("enhancements", entry)
 
     def test_entry_defaults_risk_to_low_zero_when_not_provided(self):
-        from contrib.multilingual.runner import entry_from_result
+        from contrib.batch_scan.runner import entry_from_result
         entry = entry_from_result({}, self.skill_dir, self.root)
         self.assertEqual(entry["risk_assessment"]["score"], 0)
         self.assertEqual(entry["risk_assessment"]["severity"], "LOW")
 
     def test_entry_preserves_explicit_risk_score_and_severity(self):
-        from contrib.multilingual.runner import entry_from_result
+        from contrib.batch_scan.runner import entry_from_result
         result = {"risk_score": 85, "risk_severity": "HIGH", "findings": []}
         entry = entry_from_result(result, self.skill_dir, self.root)
         self.assertEqual(entry["risk_assessment"]["score"], 85)
         self.assertEqual(entry["risk_assessment"]["severity"], "HIGH")
 
     def test_entry_marks_gap_fill_applied_in_enhancements(self):
-        from contrib.multilingual.runner import entry_from_result
+        from contrib.batch_scan.runner import entry_from_result
         entry = entry_from_result(
             {"findings": []}, self.skill_dir, self.root,
             detected_language="zh", gap_fill_applied=True, gap_fill_findings=3,
@@ -663,32 +663,32 @@ class TestEntryFromResult(unittest.TestCase):
         self.assertEqual(entry["enhancements"]["gap_fill_findings"], 3)
 
     def test_entry_counts_english_keyword_rules_skipped_for_non_english(self):
-        from contrib.multilingual.runner import entry_from_result
+        from contrib.batch_scan.runner import entry_from_result
         entry = entry_from_result(
             {"findings": []}, self.skill_dir, self.root, detected_language="zh",
         )
         self.assertGreater(entry["enhancements"]["english_keyword_rules_skipped"], 0)
 
     def test_entry_zero_english_keyword_rules_skipped_for_english(self):
-        from contrib.multilingual.runner import entry_from_result
+        from contrib.batch_scan.runner import entry_from_result
         entry = entry_from_result(
             {"findings": []}, self.skill_dir, self.root, detected_language="en",
         )
         self.assertEqual(entry["enhancements"]["english_keyword_rules_skipped"], 0)
 
     def test_entry_uses_manifest_name_when_available(self):
-        from contrib.multilingual.runner import entry_from_result
+        from contrib.batch_scan.runner import entry_from_result
         result = {"manifest": {"name": "my-skill"}, "findings": []}
         entry = entry_from_result(result, self.skill_dir, self.root)
         self.assertEqual(entry["skill"]["name"], "my-skill")
 
     def test_entry_falls_back_to_directory_name_when_no_manifest(self):
-        from contrib.multilingual.runner import entry_from_result
+        from contrib.batch_scan.runner import entry_from_result
         entry = entry_from_result({"findings": []}, self.skill_dir, self.root)
         self.assertEqual(entry["skill"]["name"], "test_skill")
 
     def test_entry_handles_value_error_on_relative_to_for_different_drives(self):
-        from contrib.multilingual.runner import entry_from_result
+        from contrib.batch_scan.runner import entry_from_result
         # On Windows, relative_to raises ValueError for different drives
         try:
             entry = entry_from_result({"findings": []}, Path("D:/skill"), Path("C:/root"))

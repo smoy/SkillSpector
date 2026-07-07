@@ -33,7 +33,7 @@ _project_root = Path(__file__).resolve().parents[3]
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from contrib.multilingual.api_pool import (
+from contrib.batch_scan.api_pool import (
     ApiKey,
     ApiKeyPool,
     PooledChatModel,

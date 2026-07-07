@@ -15,7 +15,7 @@ Zero changes to upstream `src/skillspector/`.
 ## What it does
 
 ```
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal --workers 7
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f terminal --workers 7
 ```
 
 1. Finds all `SKILL.md`-containing directories under the input root
@@ -38,7 +38,7 @@ source .venv/bin/activate
 pip install -e .
 
 # Copy and edit the environment template
-cp contrib/multilingual/.env.example .env
+cp contrib/batch_scan/.env.example .env
 ```
 
 The `.env` file needs these keys (see `.env.example` for the full template):
@@ -60,19 +60,19 @@ The `.env` file needs these keys (see `.env.example` for the full template):
 ### Static-only (fast, no API keys needed)
 
 ```bash
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ --no-llm
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ --no-llm
 ```
 
 ### Full LLM scan
 
 ```bash
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal --workers 7
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f terminal --workers 7
 ```
 
 ### Test with built-in fixtures
 
 ```bash
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal --workers 8
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f terminal --workers 8
 ```
 
 23 skills designed to exercise every detection rule.
@@ -197,7 +197,7 @@ static rules, LLM finds 2–8 additional issues per skill.
 skillspector scan ./tests/fixtures/malicious_skill/ -f json -o upstream.json
 
 # Batch — scan all skills
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f json -o batch.json
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f json -o batch.json
 ```
 
 Key differences in batch output:
@@ -211,49 +211,49 @@ Key differences in batch output:
 ### Scan (LLM mode)
 
 ```bash
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal --workers 7    # default
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal --workers 1    # sequential, easy to read
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal --workers 20   # high throughput
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f terminal --workers 7    # default
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f terminal --workers 1    # sequential, easy to read
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f terminal --workers 20   # high throughput
 ```
 
 ### Scan (static-only, no API keys)
 
 ```bash
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ --no-llm
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ --no-require-llm --no-llm  # skip LLM even for non-English
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ --no-llm
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ --no-require-llm --no-llm  # skip LLM even for non-English
 ```
 
 ### Output formats
 
 ```bash
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal                # default (Rich)
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f json -o report.json
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f markdown -o report.md
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f terminal                # default (Rich)
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f json -o report.json
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f markdown -o report.md
 ```
 
 ### Fixture test (built-in 23 skills)
 
 ```bash
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal --workers 8
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal --workers 8 --no-llm
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f json -o report.json --workers 8
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f terminal --workers 8
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f terminal --workers 8 --no-llm
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f json -o report.json --workers 8
 ```
 
 ### Language override
 
 ```bash
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ --lang auto --workers 4    # detect (default)
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ --lang zh -f terminal --workers 4
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ --lang ja -f terminal --workers 4
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ --lang ko -f terminal --workers 4
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ --lang en -f terminal --workers 4   # skip gap-fill
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ --lang auto --workers 4    # detect (default)
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ --lang zh -f terminal --workers 4
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ --lang ja -f terminal --workers 4
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ --lang ko -f terminal --workers 4
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ --lang en -f terminal --workers 4   # skip gap-fill
 ```
 
 ### Debugging
 
 ```bash
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ --workers 1 -V             # single worker + verbose
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ --workers 4 -V
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ --workers 1 -V             # single worker + verbose
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ --workers 4 -V
 skillspector scan ./tests/fixtures/malicious_skill/ --no-llm                   # verify upstream works
 ```
 
@@ -261,13 +261,13 @@ skillspector scan ./tests/fixtures/malicious_skill/ --no-llm                   #
 
 ```bash
 skillspector scan ./tests/fixtures/malicious_skill/ -f json -o upstream.json
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f json -o batch.json --workers 4
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f json -o batch.json --workers 4
 ```
 
 ### CI
 
 ```bash
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f json -o report.json --workers 8
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f json -o report.json --workers 8
 if [ $? -eq 0 ]; then echo "All clean"; fi
 ```
 
@@ -294,7 +294,7 @@ if [ $? -eq 0 ]; then echo "All clean"; fi
 
 ```bash
 # Single worker + verbose output — easiest to read
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ --workers 1 -V
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ --workers 1 -V
 
 # Verify upstream still works
 skillspector scan ./tests/fixtures/malicious_skill/ --no-llm
@@ -304,7 +304,7 @@ skillspector scan ./tests/fixtures/malicious_skill/ --no-llm
 
 ```bash
 # Static-only + skip LLM requirement even for non-English skills
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ --no-require-llm --no-llm
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ --no-require-llm --no-llm
 ```
 
 ## Exit codes
@@ -318,7 +318,7 @@ python -m contrib.multilingual.batch_scan ./tests/fixtures/ --no-require-llm --n
 CI usage:
 
 ```bash
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f json -o report.json
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f json -o report.json
 if [ $? -eq 0 ]; then
     echo "All clean"
 fi
@@ -354,30 +354,30 @@ See `DESIGN.md` for architecture details and `docs/archive/FUTURE_WORK.md` for s
 # === All 164 tests ===
 
 # Unit tests — random order (seed=42, 120 tests)
-python contrib/multilingual/tests/tests-pro/random_numbered.py
+python contrib/batch_scan/tests/tests-pro/random_numbered.py
 
 # Pool wiring smoke test (4 checks)
-python contrib/multilingual/tests/test_pool_wiring.py
+python contrib/batch_scan/tests/test_pool_wiring.py
 
 # Monkey-patch invasiveness (14 tests)
-python contrib/multilingual/tests/test_monkeypatch_invasiveness.py
+python contrib/batch_scan/tests/test_monkeypatch_invasiveness.py
 
 # Monkey-patch fragility (26 tests)
-python contrib/multilingual/tests/test_monkeypatch_fragility.py
+python contrib/batch_scan/tests/test_monkeypatch_fragility.py
 
 # === Convenience ===
 
 # All review-themed tests in one command
 python -m unittest \
-  contrib.multilingual.tests.test_monkeypatch_invasiveness \
-  contrib.multilingual.tests.test_monkeypatch_fragility -v
-python contrib/multilingual/tests/test_pool_wiring.py
+  contrib.batch_scan.tests.test_monkeypatch_invasiveness \
+  contrib.batch_scan.tests.test_monkeypatch_fragility -v
+python contrib/batch_scan/tests/test_pool_wiring.py
 
 # Mutation test — 30 injected bugs across 4 risk areas
-python contrib/multilingual/tests/tests-pro/mutation_max.py
+python contrib/batch_scan/tests/tests-pro/mutation_max.py
 
 # Sequential pytest (if pytest installed)
-pytest contrib/multilingual/tests/tests-pro/ -v
+pytest contrib/batch_scan/tests/tests-pro/ -v
 ```
 
 ## For PR Reviewers

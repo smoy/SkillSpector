@@ -14,7 +14,7 @@
 1. Zero changes to `src/skillspector/`
 2. Subclass and wrap, don't rewrite
 3. Output comparable with standard single-skill scan
-4. All extensions in `contrib/multilingual/`
+4. All extensions in `contrib/batch_scan/`
 
 ---
 
@@ -23,7 +23,7 @@
 ### Four-layer model
 
 ```
-CLI layer          python -m contrib.multilingual.batch_scan
+CLI layer          python -m contrib.batch_scan.batch_scan
 Scheduling layer   ThreadPoolExecutor(max_workers=N)
 API Pool layer     ApiKeyPool (multi-key scheduler)
 Graph layer        graph.invoke() per skill (upstream, untouched)
@@ -96,7 +96,7 @@ Chose stdlib `unicodedata` over ML-based detectors (e.g., `langdetect`, `fasttex
 ### Files created (9 source + tests + docs)
 
 ```
-contrib/multilingual/
+contrib/batch_scan/
 ├── __init__.py                       # Package init + dotenv pre-loading
 ├── discovery.py                      # Recursive SKILL.md finder
 ├── detection.py                      # Unicode script-ratio detection

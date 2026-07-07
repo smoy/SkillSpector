@@ -17,7 +17,7 @@
 
 All three formatters accept the same ``list[dict]`` result list and
 produce a string.  The entry shape is defined by
-:func:`~contrib.multilingual.runner.entry_from_result`.
+:func:`~contrib.batch_scan.runner.entry_from_result`.
 """
 
 from __future__ import annotations

@@ -33,7 +33,7 @@ from pathlib import Path
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
 
-# Ensure project root is on sys.path (test lives under contrib/multilingual/tests/)
+# Ensure project root is on sys.path (test lives under contrib/batch_scan/tests/)
 _project_root = Path(__file__).resolve().parents[3]
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
@@ -46,13 +46,13 @@ os.environ["SKILLSPECTOR_API_KEYS"] = (
 )
 
 # -- Build pool ------------------------------------------------------------
-from contrib.multilingual.api_pool import create_api_key_pool_from_env
+from contrib.batch_scan.api_pool import create_api_key_pool_from_env
 pool = create_api_key_pool_from_env()
 assert pool is not None, "2 keys should produce a pool"
 print(f"✅ Pool created: {pool.keys_configured} keys")
 
 # -- Scoped patches + pool wiring -----------------------------------------
-from contrib.multilingual.runner import set_api_pool, deepseek_compat
+from contrib.batch_scan.runner import set_api_pool, deepseek_compat
 
 with deepseek_compat():
     set_api_pool(pool)
@@ -72,7 +72,7 @@ with deepseek_compat():
     print(f"✅ LLMAnalyzerBase._llm → {type(analyzer._llm).__name__} (graph path)")
 
     # Path 3: gap-fill pass
-    from contrib.multilingual.gap_fill import GapFillAnalyzer
+    from contrib.batch_scan.gap_fill import GapFillAnalyzer
     gf = GapFillAnalyzer(language="zh", api_pool=pool)
     assert type(gf.chat_model).__name__ == "PooledChatModel"
     print(f"✅ GapFillAnalyzer → {type(gf.chat_model).__name__} (gap-fill path)")

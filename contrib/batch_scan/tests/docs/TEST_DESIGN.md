@@ -1,4 +1,4 @@
-# Test Design Document — contrib/multilingual
+# Test Design Document — contrib/batch_scan
 
 > **WHY & HOW.** The design rationale behind every test suite — how each
 > answers a specific concern from the PR #100 review. For coverage maps

@@ -52,7 +52,7 @@ from skillspector.llm_analyzer_base import (
 )
 from skillspector.nodes.meta_analyzer import LLMMetaAnalyzer, MetaAnalyzerResult
 
-from contrib.multilingual.runner import (
+from contrib.batch_scan.runner import (
     _check_signature,
     _original_asyncio_run,
     _original_base_init,
@@ -73,7 +73,7 @@ from contrib.multilingual.runner import (
 
 def _force_restore() -> None:
     """Safety-net: restore all patches regardless of depth counter."""
-    import contrib.multilingual.runner as _runner
+    import contrib.batch_scan.runner as _runner
     while _runner._patches_depth > 0:
         _runner._restore_patches()
 
@@ -194,7 +194,7 @@ class TestGuardPassesCurrentUpstream(unittest.TestCase):
 
     def test_guard_after_setup_and_manual_restore_still_passes(self) -> None:
         """Guard should pass after setup_deepseek_compat() + manual restore."""
-        from contrib.multilingual.runner import setup_deepseek_compat
+        from contrib.batch_scan.runner import setup_deepseek_compat
         setup_deepseek_compat()
         _force_restore()
         try:
@@ -516,7 +516,7 @@ class TestOriginalCapturedAtImportTime(unittest.TestCase):
         )
 
     def test_original_chatopenai_init_is_not_none(self) -> None:
-        from contrib.multilingual.runner import _original_chatopenai_init
+        from contrib.batch_scan.runner import _original_chatopenai_init
         self.assertIsNotNone(
             _original_chatopenai_init,
             "_original_chatopenai_init must be captured at import time",

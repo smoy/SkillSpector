@@ -10,12 +10,12 @@
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
-cp contrib/multilingual/.env.example .env   # edit with your API keys
+cp contrib/batch_scan/.env.example .env   # edit with your API keys
 ```
 
 Verify everything works:
 ```bash
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal --workers 8
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f terminal --workers 8
 ```
 
 ---
@@ -23,7 +23,7 @@ python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal --worker
 ## Project Map
 
 ```
-contrib/multilingual/
+contrib/batch_scan/
 ├── batch_scan.py          # CLI entry + ThreadPoolExecutor (start here)
 ├── runner.py              # graph.invoke() wrapper + 7 patches + pool wiring (core)
 ├── gap_fill.py            # GapFillAnalyzer — LLM pass for 8 uncovered rules
@@ -63,30 +63,30 @@ contrib/multilingual/
 
 ```bash
 # All 164 tests
-python contrib/multilingual/tests/tests-pro/random_numbered.py       # 120 unit (seed=42)
-python contrib/multilingual/tests/test_pool_wiring.py                 # 4 smoke checks
-python contrib/multilingual/tests/test_monkeypatch_invasiveness.py    # 14 thematic
-python contrib/multilingual/tests/test_monkeypatch_fragility.py       # 26 thematic
+python contrib/batch_scan/tests/tests-pro/random_numbered.py       # 120 unit (seed=42)
+python contrib/batch_scan/tests/test_pool_wiring.py                 # 4 smoke checks
+python contrib/batch_scan/tests/test_monkeypatch_invasiveness.py    # 14 thematic
+python contrib/batch_scan/tests/test_monkeypatch_fragility.py       # 26 thematic
 
 # Review-themed only
 python -m unittest \
-  contrib.multilingual.tests.test_monkeypatch_invasiveness \
-  contrib.multilingual.tests.test_monkeypatch_fragility -v
-python contrib/multilingual/tests/test_pool_wiring.py
+  contrib.batch_scan.tests.test_monkeypatch_invasiveness \
+  contrib.batch_scan.tests.test_monkeypatch_fragility -v
+python contrib/batch_scan/tests/test_pool_wiring.py
 
 # Mutation test
-python contrib/multilingual/tests/tests-pro/mutation_max.py
+python contrib/batch_scan/tests/tests-pro/mutation_max.py
 
 # End-to-end (fixture suite)
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal --workers 8
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal --workers 8 --no-llm
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f terminal --workers 8
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f terminal --workers 8 --no-llm
 ```
 
 **Three commands catch most regressions:**
 ```bash
-python contrib/multilingual/tests/tests-pro/random_numbered.py
-python contrib/multilingual/tests/test_pool_wiring.py
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal --workers 8
+python contrib/batch_scan/tests/tests-pro/random_numbered.py
+python contrib/batch_scan/tests/test_pool_wiring.py
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f terminal --workers 8
 ```
 
 ---

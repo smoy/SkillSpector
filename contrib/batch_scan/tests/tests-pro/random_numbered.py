@@ -43,7 +43,7 @@ for mod in [
 ]:
     flatten(
         loader.loadTestsFromName(
-            f"contrib.multilingual.tests.tests-pro.{mod}"
+            f"contrib.batch_scan.tests.tests-pro.{mod}"
         )
     )
 

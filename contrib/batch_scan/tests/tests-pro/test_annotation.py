@@ -30,7 +30,7 @@ if str(_project_root) not in sys.path:
 
 from skillspector.models import Finding
 
-from contrib.multilingual.annotation import annotate_findings, is_language_compatible
+from contrib.batch_scan.annotation import annotate_findings, is_language_compatible
 
 
 def _make_finding(rule_id: str = "P1", file: str = "test.md") -> dict:

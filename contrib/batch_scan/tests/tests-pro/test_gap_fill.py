@@ -33,7 +33,7 @@ if str(_project_root) not in sys.path:
 from skillspector.llm_analyzer_base import Batch
 from skillspector.models import Finding
 
-from contrib.multilingual.gap_fill import (
+from contrib.batch_scan.gap_fill import (
     GapFillAnalyzer,
     GapFillFinding,
     GapFillResult,

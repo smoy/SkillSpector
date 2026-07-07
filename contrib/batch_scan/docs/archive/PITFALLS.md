@@ -183,9 +183,9 @@ declaring a change complete.
 ### The fixture suite is your safety net
 
 ```bash
-python -m contrib.multilingual.batch_scan ./tests/fixtures/ -f terminal --workers 8
-cd contrib/multilingual/tests/tests-pro && python random_numbered.py
-python contrib/multilingual/tests/tests-pro/mutation_max.py
+python -m contrib.batch_scan.batch_scan ./tests/fixtures/ -f terminal --workers 8
+cd contrib/batch_scan/tests/tests-pro && python random_numbered.py
+python contrib/batch_scan/tests/tests-pro/mutation_max.py
 ```
 
 Three commands catch most regressions: batch scan → unit tests → mutation tests.
