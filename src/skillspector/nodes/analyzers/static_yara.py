@@ -123,7 +123,7 @@ def _build_namespace_map(
             ns = f"{rf.parent.name}/{ns}"
         try:
             filepaths[ns] = str(_materialize_rule_file(rf, temp_dir, ns))
-        except (binascii.Error, UnicodeDecodeError) as exc:
+        except (binascii.Error, UnicodeDecodeError, ValueError) as exc:
             skipped += 1
             logger.debug("%s: skipping malformed encoded rule %s: %s", ANALYZER_ID, rf, exc)
     return filepaths, skipped
