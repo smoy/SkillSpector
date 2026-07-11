@@ -179,6 +179,34 @@ _CODE_EXAMPLE_CONFIDENCE_FACTOR = 0.5
 
 _NON_EXECUTABLE_FILE_TYPES = frozenset({"markdown", "text", "json", "yaml", "toml"})
 
+_SEMANTIC_STRING_DOC_PRONE_RULES = frozenset({"PE3", "RA1", "TM1", "AR2"})
+_EXECUTION_SIGNAL = re.compile(
+    r"(?:\b\w+\s*=|\bos\.(?:environ|getenv|system)\b|\b(?:subprocess|eval|exec)\b|[|>]"
+    r"|\b(?:open|read_text|write_text)\s*\()",
+    re.IGNORECASE,
+)
+
+
+def _is_documentation_context(af: AnalyzerFinding, file_type: str, path: str) -> bool:
+    """Return true when a governed finding is prose or a comment without execution signals."""
+    if af.rule_id not in _SEMANTIC_STRING_DOC_PRONE_RULES:
+        return False
+    if path.replace("\\", "/").lower().endswith("skill.md"):
+        return False
+    context = af.context or ""
+    if _EXECUTION_SIGNAL.search(context):
+        return False
+    if file_type in _NON_EXECUTABLE_FILE_TYPES:
+        return True
+    matched_text = af.matched_text or ""
+    return bool(
+        matched_text
+        and any(
+            line.lstrip().startswith(("#", "//", "/*", "*")) and matched_text in line
+            for line in context.splitlines()
+        )
+    )
+
 
 def _is_documentation_markdown(path: str) -> bool:
     """Return True for markdown files in documentation subdirectories (not SKILL.md)."""
@@ -287,6 +315,14 @@ def run_static_patterns(
                         af.location.start_line,
                         af.confidence,
                     )
+                if _is_documentation_context(af, file_type, path):
+                    logger.debug(
+                        "Filtered documentation-context finding: %s in %s:%d",
+                        af.rule_id,
+                        path,
+                        af.location.start_line,
+                    )
+                    continue
                 if is_doc_markdown:
                     af.confidence *= _DOCUMENTATION_CONFIDENCE_FACTOR
                 findings.append(analyzer_finding_to_finding(af))
