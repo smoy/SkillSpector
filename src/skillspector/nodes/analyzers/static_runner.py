@@ -178,6 +178,7 @@ _DOCUMENTATION_CONFIDENCE_FACTOR = 0.3
 _CODE_EXAMPLE_CONFIDENCE_FACTOR = 0.5
 
 _NON_EXECUTABLE_FILE_TYPES = frozenset({"markdown", "text", "json", "yaml", "toml"})
+_DOC_PROSE_FILE_TYPES = frozenset({"markdown", "text"})
 
 _SEMANTIC_STRING_DOC_PRONE_RULES = frozenset({"PE3", "RA1", "TM1", "AR2"})
 _EXECUTION_SIGNAL = re.compile(
@@ -196,7 +197,7 @@ def _is_documentation_context(af: AnalyzerFinding, file_type: str, path: str) ->
     context = af.context or ""
     if _EXECUTION_SIGNAL.search(context):
         return False
-    if file_type in _NON_EXECUTABLE_FILE_TYPES:
+    if file_type in _DOC_PROSE_FILE_TYPES:
         return True
     matched_text = af.matched_text or ""
     return bool(

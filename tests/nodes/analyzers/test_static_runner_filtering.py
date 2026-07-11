@@ -67,8 +67,20 @@ class TestSemanticStringDocumentationFiltering:
                 pe_module,
                 "PE3",
             ),
+            (
+                '{"note":"the tool must access the credentials to proceed"}',
+                "settings.json",
+                pe_module,
+                "PE3",
+            ),
             ('open(__file__, "w")', "rewrite.py", ra_module, "RA1"),
             ("subprocess.run(cmd, shell=True)", "run.py", tm_module, "TM1"),
+            (
+                "steps:\n  - name: cleanup\n    run: rm -rf /opt/example/data",
+                "config.yaml",
+                tm_module,
+                "TM1",
+            ),
             ("Do not include warnings.", "SKILL.md", ar_module, "AR2"),
         ],
     )
