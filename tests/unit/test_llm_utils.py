@@ -41,7 +41,13 @@ from skillspector.llm_utils import (
     is_llm_available,
     run_async,
 )
-from skillspector.providers import NO_LLM_API_KEY_MESSAGE, resolve_provider_credentials
+from skillspector.providers import (
+    NO_LLM_API_KEY_MESSAGE,
+    reset_provider,
+    resolve_chat_model_credentials,
+    resolve_provider_credentials,
+    use_provider,
+)
 from skillspector.providers.nv_build import NvBuildProvider
 from skillspector.providers.openai import OpenAIProvider
 
@@ -122,6 +128,84 @@ class TestCredentialResolution:
         assert isinstance(llm, ChatAnthropic)
         assert llm.model == "claude-opus-4-6"
 
+    def test_injected_provider_without_credentials_builds_native_chat_model(self) -> None:
+        chat_model = object()
+
+        class _InjectedProvider:
+            DEFAULT_MODEL = "injected-default"
+            SLOT_DEFAULTS = {"meta_analyzer": "injected-default"}
+
+            def get_context_length(self, model: str) -> int | None:
+                return 4096 if model == "injected-default" else None
+
+            def get_max_output_tokens(self, model: str) -> int | None:
+                return 128 if model == "injected-default" else None
+
+            def resolve_model(self, slot: str = "default") -> str:
+                return "injected-default"
+
+            def resolve_credentials(self) -> tuple[str, str | None] | None:
+                return None
+
+            def create_chat_model(
+                self,
+                model: str,
+                *,
+                max_tokens: int,
+                timeout: float | None = 120,
+            ) -> object:
+                assert model == "injected-default"
+                assert max_tokens == 128
+                assert timeout == 120
+                return chat_model
+
+        token = use_provider(_InjectedProvider())
+        try:
+            assert is_llm_available() == (True, None)
+            assert get_chat_model() is chat_model
+        finally:
+            reset_provider(token)
+
+    def test_injected_provider_without_native_model_does_not_fall_back_to_openai(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fallback")
+
+        class _InjectedProvider:
+            DEFAULT_MODEL = "injected-default"
+            SLOT_DEFAULTS = {}
+
+            def get_context_length(self, model: str) -> int | None:
+                return 4096
+
+            def get_max_output_tokens(self, model: str) -> int | None:
+                return 128
+
+            def resolve_model(self, slot: str = "default") -> str:
+                return "injected-default"
+
+            def resolve_credentials(self) -> tuple[str, str | None] | None:
+                return None
+
+            def create_chat_model(
+                self,
+                model: str,
+                *,
+                max_tokens: int,
+                timeout: float | None = 120,
+            ) -> object | None:
+                return None
+
+        token = use_provider(_InjectedProvider())
+        try:
+            assert resolve_chat_model_credentials() is None
+            assert is_llm_available() == (False, NO_LLM_API_KEY_MESSAGE)
+            with pytest.raises(ValueError) as exc_info:
+                get_chat_model()
+            assert str(exc_info.value) == NO_LLM_API_KEY_MESSAGE
+        finally:
+            reset_provider(token)
+
 
 class TestFetchModelTokenLimits:
     def test_returns_input_and_output_token_pair(self) -> None:
@@ -200,6 +284,50 @@ class TestIsLlmAvailable:
             ok, err = is_llm_available()
         assert ok is False
         assert "not found" in (err or "").lower()
+
+    def test_bound_cli_provider_uses_cli_availability(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Bound CLI providers should use is_available, not the HTTP probe path."""
+
+        class _InjectedCLIProvider:
+            DEFAULT_MODEL = "cli-default"
+            SLOT_DEFAULTS = {"meta_analyzer": "cli-default"}
+
+            def get_context_length(self, model: str) -> int | None:
+                return 4096
+
+            def get_max_output_tokens(self, model: str) -> int | None:
+                return 128
+
+            def resolve_model(self, slot: str = "default") -> str:
+                return "cli-default"
+
+            def resolve_credentials(self) -> tuple[str, str | None] | None:
+                return None
+
+            def complete(
+                self,
+                prompt: str,
+                *,
+                model: str,
+                max_output_tokens: int,
+            ) -> str:
+                return "ok"
+
+        provider = _InjectedCLIProvider()
+        provider.is_available = MagicMock(return_value=(False, "binary not found on PATH"))
+        token = use_provider(provider)
+        try:
+            with patch("skillspector.llm_utils.create_chat_model") as mock_create_chat_model:
+                ok, err = is_llm_available()
+        finally:
+            reset_provider(token)
+
+        assert ok is False
+        assert err == "binary not found on PATH"
+        provider.is_available.assert_called_once_with()
+        mock_create_chat_model.assert_not_called()
 
 
 class TestChatCompletionCLIDispatch:
