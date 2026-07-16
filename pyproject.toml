@@ -50,7 +50,7 @@ dependencies = [
 
 [project.optional-dependencies]
 mcp = [
-    "mcp>=1.2.0",
+    "mcp>=1.28.1",
 ]
 dev = [
     "skillspector[mcp]",
