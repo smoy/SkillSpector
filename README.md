@@ -4,7 +4,7 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/NVIDIA/SkillSpector/badge)](https://scorecard.dev/viewer/?uri=github.com/NVIDIA/SkillSpector)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/smoy/SkillSpector/badge)](https://scorecard.dev/viewer/?uri=github.com/smoy/SkillSpector)
 
 ## Overview
 
@@ -12,7 +12,7 @@ AI agent skills (used by Claude Code, Codex CLI, Gemini CLI, etc.) execute with 
 
 SkillSpector helps you answer: **"Is this skill safe to install?"**
 
-SkillSpector is part of the [NVIDIA Verified Skills pipeline](https://docs.nvidia.com/skills/), which scans, evaluates, and signs agent skills before publication. Skills that pass are published to the [NVIDIA skills catalog](https://github.com/NVIDIA/skills).
+SkillSpector is part of the [smoy Verified Skills pipeline](https://docs.nvidia.com/skills/), which scans, evaluates, and signs agent skills before publication. Skills that pass are published to the [smoy skills catalog](https://github.com/smoy/skills).
 
 ## Documentation
 
@@ -41,21 +41,21 @@ Create and activate a virtual environment first (all `make` targets assume the v
 **Quick install with uv (CLI-only):**
 
 ```bash
-uv tool install git+https://github.com/NVIDIA/skillspector.git
+uv tool install git+https://github.com/smoy/skillspector.git
 # Update later: uv tool update skillspector
 ```
 
 If you plan to run `skillspector mcp`, install the MCP extra at install time:
 
 ```bash
-uv tool install 'skillspector[mcp] @ git+https://github.com/NVIDIA/skillspector.git'
+uv tool install 'skillspector[mcp] @ git+https://github.com/smoy/skillspector.git'
 ```
 
 **From source:**
 
 ```bash
 # Clone the repository
-git clone https://github.com/NVIDIA/skillspector.git
+git clone https://github.com/smoy/skillspector.git
 cd skillspector
 
 # Create and activate virtual environment
@@ -230,7 +230,7 @@ inference gateways.
 | `anthropic` | `ANTHROPIC_API_KEY` | api.anthropic.com | `claude-opus-4-6` |
 | `anthropic_proxy` | `ANTHROPIC_PROXY_API_KEY` + `ANTHROPIC_PROXY_ENDPOINT_URL` | Any Vertex-style raw-predict proxy | `claude-sonnet-4-6` |
 | `bedrock` | `AWS_PROFILE` (optional) + `AWS_REGION` — SigV4 via boto3 | AWS Bedrock Runtime | `us.anthropic.claude-sonnet-4-6-20250915-v1:0` |
-| `nv_build` | `NVIDIA_INFERENCE_KEY` | build.nvidia.com | `deepseek-ai/deepseek-v4-flash` |
+| `nv_build` | `smoy_INFERENCE_KEY` | build.nvidia.com | `deepseek-ai/deepseek-v4-flash` |
 | `claude_cli` | _(none — uses local CLI auth)_ | local `claude` binary | local Claude runtime fallback, or `SKILLSPECTOR_MODEL` |
 | `codex_cli` | _(none — uses local CLI auth)_ | local `codex` binary | local Codex runtime fallback, or `SKILLSPECTOR_MODEL` |
 
@@ -264,9 +264,9 @@ export AWS_REGION=us-west-2  # default if unset
 # export SKILLSPECTOR_MODEL=us.anthropic.claude-opus-4-6-20250915-v1:0
 skillspector scan ./my-skill/
 
-# NVIDIA build.nvidia.com
+# smoy build.nvidia.com
 export SKILLSPECTOR_PROVIDER=nv_build
-export NVIDIA_INFERENCE_KEY=nvapi-...
+export smoy_INFERENCE_KEY=nvapi-...
 skillspector scan ./my-skill/
 
 # Local Claude CLI — no API key; uses your existing `claude auth login` session
@@ -308,7 +308,7 @@ out-of-band audit step.
 
 ```bash
 # Install, or reinstall if you already used the CLI-only path
-uv tool install --force 'skillspector[mcp] @ git+https://github.com/NVIDIA/skillspector.git'
+uv tool install --force 'skillspector[mcp] @ git+https://github.com/smoy/skillspector.git'
 
 # FastMCP stdio transport for local CLI agents
 skillspector mcp
@@ -572,7 +572,7 @@ Issues (2)
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `SKILLSPECTOR_PROVIDER` | Active LLM provider: `openai`, `anthropic`, `anthropic_proxy`, `bedrock`, `nv_build`, `claude_cli`, `codex_cli`, or `gemini_cli`. Hosted providers use bundled `model_registry.yaml` defaults; `claude_cli` and `codex_cli` fall back to the local CLI runtime's default model unless `SKILLSPECTOR_MODEL` is set. Defaults to `nv_build`. | Optional |
-| `NVIDIA_INFERENCE_KEY` | Credential for the `nv_build` provider (build.nvidia.com). | Required for LLM analysis when `SKILLSPECTOR_PROVIDER=nv_build` |
+| `smoy_INFERENCE_KEY` | Credential for the `nv_build` provider (build.nvidia.com). | Required for LLM analysis when `SKILLSPECTOR_PROVIDER=nv_build` |
 | `OPENAI_API_KEY` | Credential for the OpenAI provider (`SKILLSPECTOR_PROVIDER=openai`). Also serves as the tier-2 fallback in the credential waterfall when the active provider returns no credentials. | Required for LLM analysis when `SKILLSPECTOR_PROVIDER=openai` |
 | `OPENAI_BASE_URL` | Override the OpenAI endpoint (e.g. point at Ollama). | Optional |
 | `SKILLSPECTOR_REASONING_EFFORT` | Optional provider- and model-dependent reasoning-effort setting. Non-empty values are trimmed and passed through unchanged; unset or blank preserves provider-default behavior. | Optional |
@@ -671,7 +671,7 @@ All `make` targets assume a virtual environment is already created and activated
 
 ```bash
 # Clone, create venv, activate, install dev dependencies
-git clone https://github.com/NVIDIA/skillspector.git
+git clone https://github.com/smoy/skillspector.git
 cd skillspector
 uv venv .venv && source .venv/bin/activate
 # or: python3 -m venv .venv && source .venv/bin/activate
@@ -786,4 +786,4 @@ Contributions are welcome! Please read our contributing guidelines and submit pu
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/NVIDIA/skillspector/issues)
+- **Issues**: [GitHub Issues](https://github.com/smoy/skillspector/issues)
