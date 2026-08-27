@@ -117,10 +117,13 @@ hiding its true behavior. This is the strongest indicator of deceptive intent
 among the LP rules -- the skill is actively performing operations it claims not
 to need.
 
-**Example:** A skill declares `permissions: [read]` but its code contains
-`httpx.post(...)`. LP1 fires for the undeclared `network` capability.
+**Example:** An Agent Skills `SKILL.md` declares `allowed-tools: Read` but its
+code contains `httpx.post(...)`. LP1 fires for the undeclared `network`
+capability.
 
-**Remediation:** Add the missing permission to SKILL.md, or remove the code
+**Remediation:** For Agent Skills `SKILL.md`, add a tool that covers the missing
+capability to the `allowed-tools` frontmatter field. For MCP server manifests,
+add the missing capability to the `permissions` list. Otherwise, remove the code
 that requires it.
 
 ---
@@ -160,19 +163,24 @@ permissions. Request only the minimum access needed.
 | **Confidence** | 0.70                                                   |
 | **Tags**       | ASI02                                                  |
 
-**Triggers when:** The manifest has no `permissions` field (or it is an empty
-list) **and** the analyzer detects code capabilities in executable files.
+**Triggers when:** The manifest declares no tool scope -- no `permissions`
+field (or an empty list) **and** no `allowed-tools` frontmatter -- and the
+analyzer detects code capabilities in executable files.
 
 **Why it matters:** Without declared permissions, the skill's intent is
 completely opaque. Users and agents cannot evaluate whether the skill's access
 level is appropriate. This is less suspicious than LP1 (could be an oversight
 rather than deception) but still a significant transparency gap.
 
-**Example:** A SKILL.md with no `permissions:` key, but the code calls
-`os.environ["API_KEY"]` and `subprocess.run(...)`.
+**Example:** A SKILL.md with neither a `permissions:` key nor an
+`allowed-tools:` key, but the code calls `os.environ["API_KEY"]` and
+`subprocess.run(...)`.
 
-**Remediation:** Add a `permissions` field to SKILL.md listing the capabilities
-the skill requires.
+**Remediation:** Declare the skill's tool scope in the manifest type you are
+authoring. For Claude Code / Agent Skills `SKILL.md`, list the tools the skill
+may invoke in the `allowed-tools` frontmatter field (`permissions` is not part
+of the SKILL.md schema and is ignored). For MCP server manifests, add a
+`permissions` list naming the required capabilities.
 
 ---
 

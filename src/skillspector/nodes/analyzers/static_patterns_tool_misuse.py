@@ -32,7 +32,7 @@ from skillspector.models import AnalyzerFinding, Location, Severity
 from skillspector.state import AnalyzerNodeResponse, SkillspectorState
 
 from . import static_runner
-from .common import get_context, get_line_number, is_code_example
+from .common import get_context, get_line_number
 from .pattern_defaults import PatternCategory
 
 logger = get_logger(__name__)
@@ -44,21 +44,32 @@ TM1_PATTERNS = [
     # shell=True is a classic command injection vector
     (r"subprocess\.\w+\s*\([^)]*shell\s*=\s*True", 0.8),
     (r"Popen\s*\([^)]*shell\s*=\s*True", 0.8),
-    # Dangerous flags — \b prevents matching rm/del inside words like firmware, format
-    (r"\b(?:rm|del|erase)\s+[^|]*-(?:r|rf|fr)\s+[/~]", 0.9),
+    # Bound command names on both sides so prefixes such as rmm/ (RAPIDS
+    # Memory Manager headers) are not interpreted as destructive commands.
+    (r"\b(?:rm\b|del\b|erase\b)\s+[^|]*-(?:r|rf|fr)\s+[/~]", 0.9),
     (r"--force\s+(?:delete|remove|push|reset|clean)", 0.7),
-    (r"--no-?(?:verify|check|validate|confirm|protect|safe)", 0.75),
+    # A bare application-defined --no-verify flag is ambiguous. Match it only
+    # for known Git hook bypasses below; retain the other explicit unsafe flags.
+    (r"--no-?(?:check|validate|confirm|protect|safe)\b", 0.75),
     (r"--skip-?(?:validation|verification|checks?|auth|tests?)", 0.7),
-    (r"--allow-?(?:empty|root|unrelated|unsafe)", 0.65),
+    # --allow-empty is a benign git-commit option, unlike the bypass flags below.
+    (r"--allow-?(?:root|unrelated|unsafe)\b", 0.65),
     # Dangerous globs and wildcards in destructive commands
-    # \b prevents matching substrings (e.g. "firmware", "format", "performance")
-    # [^)\n]{0,80} bounds the span to avoid matching across long prose to a stray "/"
-    (r"\b(?:rm|shutil\.rmtree)\s*\(?[^)\n]{0,80}['\"]?\s*/\s*['\"]?", 0.85),
+    # Match a path in the actual rm argument token. Stop at whitespace and shell
+    # redirection operators so `rm "$VAR" 2>/dev/null` does not borrow the slash
+    # from the redirection target.
+    (
+        r"\brm\b\s+(?:-[A-Za-z]+\s+)*(?:--\s+)?"
+        r"(?:['\"][^'\"]*/[^'\"]*['\"]|[^\s|;&>]*/[^\s|;&>]*)",
+        0.85,
+    ),
+    (r"\bshutil\.rmtree\s*\(\s*['\"]\s*/", 0.85),
     (r"(?:chmod|chown)\s+[^|]*(?:777|666|a\+rwx)", 0.8),
     # Git force operations
     (r"git\s+push\s+[^|]*--force", 0.7),
     (r"git\s+reset\s+--hard", 0.65),
     (r"git\s+clean\s+-[fd]+x", 0.7),
+    (r"\bgit\s+(?:am|commit|merge|push)\b[^\n|]*--no-verify\b", 0.75),
     # Curl/wget with unsafe parameters
     (r"curl\s+[^|]*-k\b", 0.6),
     (r"curl\s+[^|]*--insecure\b", 0.65),
@@ -74,15 +85,15 @@ TM1_PATTERNS = [
     ),
     # Dangerous tool parameter patterns in instructions
     (
-        r"(?:set|pass|use)\s+(?:the\s+)?(?:parameter|argument|flag|option)\s+(?:to\s+)?(?:shell\s*=\s*True|--force|--no-verify|-rf)\b",
-        0.75,
+        r"(?:set|pass|use)\s+(?:the\s+)?(?:parameter|argument|flag|option)\s+(?:to\s+)?(?:shell\s*=\s*True|--force|-rf)\b",
+        0.8,
     ),
 ]
 
 # TM2: Chaining Abuse — chained commands to bypass safety
 TM2_PATTERNS = [
     # Shell command chaining with dangerous commands (\b prevents substring matches)
-    (r"(?:&&|;)\s*\b(?:rm|del|erase)\s+-", 0.75),
+    (r"(?:&&|;)\s*\b(?:rm\b|del\b|erase\b)\s+-", 0.75),
     (r"(?:&&|;)\s*(?:curl|wget)\s+[^|]*\|\s*(?:ba)?sh", 0.9),
     (r"(?:&&|;)\s*(?:sudo|su\s+)", 0.75),
     (r"(?:&&|;)\s*(?:chmod|chown)\s+(?:777|666|a\+rwx|-R)", 0.75),
@@ -181,6 +192,11 @@ _SAFE_DOCKERFILE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"rm\s+-rf\s+/root/\.cache", re.IGNORECASE),
 )
 
+_SAFE_CACHE_CLEANUP_RE = re.compile(
+    r"\brm\s+-rf\s+(?P<quote>['\"]?)(?P<path>(?:\$?\{?HOME\}?|~)/\.cache/[^\s;&|'\"]+)(?P=quote)(?:\s*(?:$|[;&|]))",
+    re.IGNORECASE,
+)
+
 # Dockerfile context indicators (nearby keywords that signal Dockerfile content)
 _DOCKERFILE_CONTEXT_RE = re.compile(
     r"\b(?:FROM|RUN|WORKDIR|COPY|ADD|ENV|EXPOSE|ENTRYPOINT|CMD|USER|HEALTHCHECK|ARG)\s",
@@ -197,6 +213,29 @@ def _is_safe_dockerfile_idiom(context: str, matched_text: str) -> bool:
     if not _DOCKERFILE_CONTEXT_RE.search(context):
         return False
     return any(p.search(matched_text) or p.search(context) for p in _SAFE_DOCKERFILE_PATTERNS)
+
+
+def _is_safe_cache_cleanup(matched_text: str) -> bool:
+    """Return True for scoped cleanup of a tool-owned user cache path."""
+    match = _SAFE_CACHE_CLEANUP_RE.fullmatch(matched_text)
+    if not match:
+        return False
+    parts = match.group("path").split("/")
+    lowered_parts = [part.lower() for part in parts]
+    cache_index = lowered_parts.index(".cache")
+    cache_parts = parts[cache_index + 1 :]
+    return bool(cache_parts) and not any(
+        part in ("", ".", "..") or "*" in part for part in cache_parts
+    )
+
+
+def _line_containing(content: str, start: int, end: int) -> str:
+    """Return the full line containing a regex match."""
+    line_start = content.rfind("\n", 0, start) + 1
+    line_end = content.find("\n", end)
+    if line_end == -1:
+        line_end = len(content)
+    return content[line_start:line_end]
 
 
 def analyze(content: str, file_path: str, file_type: str) -> list[AnalyzerFinding]:
@@ -216,9 +255,12 @@ def analyze(content: str, file_path: str, file_type: str) -> list[AnalyzerFindin
             line_num = get_line_number(content, match.start())
             context_text = ctx(match.start())
             matched = match.group(0)[:200]
+            matched_line = _line_containing(content, match.start(), match.end())
 
-            if _is_safe_container_command(context_text) or _is_safe_dockerfile_idiom(
-                context_text, matched
+            if (
+                _is_safe_container_command(context_text)
+                or _is_safe_dockerfile_idiom(context_text, matched)
+                or _is_safe_cache_cleanup(matched_line)
             ):
                 adj = min(confidence, 0.15)
                 sev = Severity.LOW
@@ -280,13 +322,9 @@ def analyze(content: str, file_path: str, file_type: str) -> list[AnalyzerFindin
                     matched_text=match.group(0)[:200],
                 )
             )
-    # TM4: privileged K8s workload. Filtered through is_code_example() because
-    # privileged/hostPath fields commonly appear in SKILL.md docs and examples.
+    # TM4: privileged K8s workload. Example filtering is delegated to the runner.
     for pattern, confidence in TM4_PATTERNS:
         for match in re.finditer(pattern, content, re.IGNORECASE | re.MULTILINE):
-            context_text = ctx(match.start())
-            if is_code_example(context_text):
-                continue
             line_num = get_line_number(content, match.start())
             findings.append(
                 AnalyzerFinding(
@@ -296,7 +334,7 @@ def analyze(content: str, file_path: str, file_type: str) -> list[AnalyzerFindin
                     location=loc(line_num),
                     confidence=confidence,
                     tags=tag,
-                    context=context_text,
+                    context=ctx(match.start()),
                     matched_text=match.group(0)[:200],
                 )
             )
@@ -305,6 +343,6 @@ def analyze(content: str, file_path: str, file_type: str) -> list[AnalyzerFindin
 
 def node(state: SkillspectorState) -> AnalyzerNodeResponse:
     """Run tool_misuse patterns and return findings."""
-    findings = static_runner.run_static_patterns(state, [sys.modules[__name__]])
-    logger.info("%s: %d findings", ANALYZER_ID, len(findings))
-    return {"findings": findings}
+    response = static_runner.run_static_patterns_with_ledger(state, [sys.modules[__name__]])
+    logger.info("%s: %d findings", ANALYZER_ID, len(response["findings"]))
+    return response
