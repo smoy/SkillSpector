@@ -27,10 +27,13 @@ import sys
 import pytest
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
 
 import skillspector.providers as providers_module
+import skillspector.providers.anthropic.provider as anthropic_provider_module
 from skillspector.providers import (
     NO_LLM_API_KEY_MESSAGE,
+    chat_models,
     create_chat_model,
     get_active_provider,
     get_metadata_provider,
@@ -42,7 +45,7 @@ from skillspector.providers import (
     resolve_provider_credentials,
     use_provider,
 )
-from skillspector.providers.anthropic import AnthropicProvider
+from skillspector.providers.anthropic import ANTHROPIC_BASE_URL, AnthropicProvider
 from skillspector.providers.antigravity_cli import AntigravityCLIProvider
 from skillspector.providers.chat_models import create_openai_compatible_chat_model
 from skillspector.providers.claude_cli import ClaudeCLIProvider
@@ -113,7 +116,9 @@ def _clean_provider_env(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
     monkeypatch.delenv("OPENAI_PROJECT_ID", raising=False)
+    monkeypatch.delenv("SKILLSPECTOR_REASONING_EFFORT", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
     monkeypatch.delenv("SKILLSPECTOR_MODEL", raising=False)
     monkeypatch.delenv("SKILLSPECTOR_MODEL_REGISTRY", raising=False)
     monkeypatch.delenv("SKILLSPECTOR_PROVIDER", raising=False)
@@ -126,6 +131,34 @@ def _clean_provider_env(monkeypatch: pytest.MonkeyPatch):
 
 class TestNvBuildProvider:
     """build.nvidia.com provider — credentials + bundled YAML metadata."""
+
+    @pytest.mark.parametrize(
+        ("model", "context_length"),
+        [
+            ("z-ai/glm-5.2", 202_749),
+            ("moonshotai/kimi-k2.6", 256_000),
+        ],
+    )
+    def test_nv_build_reported_model_metadata(self, model: str, context_length: int) -> None:
+        provider = NvBuildProvider()
+        assert provider.get_context_length(model) == context_length
+
+    def test_glm_declares_both_limits(self) -> None:
+        """max_output_tokens is optional, and its absence is not neutral.
+
+        Without it the output budget is derived as a percentage of the context
+        window, which is what produced a 250_000-token request against an
+        endpoint accepting 202_749 combined.
+        """
+        provider = NvBuildProvider()
+        assert provider.get_context_length("z-ai/glm-5.2") == 202_749
+        assert provider.get_max_output_tokens("z-ai/glm-5.2") == 32_768
+
+    @pytest.mark.parametrize("model", ["glm-5.2", "z-ai/glm-5.2 "])
+    def test_nv_build_model_near_match_stays_unresolved(self, model: str) -> None:
+        provider = NvBuildProvider()
+        assert provider.get_context_length(model) is None
+        assert provider.get_max_output_tokens(model) is None
 
     def test_returns_none_without_env_var(self) -> None:
         assert NvBuildProvider().resolve_credentials() is None
@@ -146,11 +179,20 @@ class TestNvBuildProvider:
         assert llm.max_tokens == 123
         assert str(llm.openai_api_base).rstrip("/") == BUILD_BASE_URL.rstrip("/")
 
-    def test_metadata_known_model_from_bundled_yaml(self) -> None:
-        """deepseek-v4-flash ships in nv_build/model_registry.yaml."""
+    def test_metadata_drops_end_of_life_model(self) -> None:
+        """deepseek-v4-flash reached end of life and returns 410 Gone.
+
+        Keeping it is worse than omitting it: an entry with a 1_000_000 window
+        makes model_info budget 250_000 output tokens, rejected on every call.
+        Absent, the conservative default applies instead.
+        """
         provider = NvBuildProvider()
-        assert provider.get_context_length("deepseek-ai/deepseek-v4-flash") == 1_000_000
-        assert provider.get_max_output_tokens("deepseek-ai/deepseek-v4-flash") == 128_000
+        assert provider.get_context_length("deepseek-ai/deepseek-v4-flash") is None
+
+    def test_default_model_is_in_the_bundled_registry(self) -> None:
+        """The invariant test_constants asserts, checked at the source too."""
+        provider = NvBuildProvider()
+        assert provider.get_context_length(NvBuildProvider.DEFAULT_MODEL) is not None
 
     def test_metadata_unknown_model_returns_none(self) -> None:
         provider = NvBuildProvider()
@@ -166,12 +208,9 @@ class TestNvBuildProvider:
         # Env override applies to every slot.
         assert NvBuildProvider().resolve_model("meta_analyzer") == "user/override"
 
-    def test_resolve_model_meta_analyzer_uses_slot_override(self) -> None:
-        # meta_analyzer is upgraded to deepseek-v4-pro on NvBuild.
-        assert (
-            NvBuildProvider().resolve_model("meta_analyzer")
-            == NvBuildProvider.SLOT_DEFAULTS["meta_analyzer"]
-        )
+    def test_resolve_model_meta_analyzer_falls_back_to_default(self) -> None:
+        # The former override named deepseek-v4-pro, absent from the catalogue.
+        assert NvBuildProvider().resolve_model("meta_analyzer") == NvBuildProvider.DEFAULT_MODEL
 
     def test_resolve_model_unknown_slot_falls_to_default(self) -> None:
         # Slots without an explicit override inherit DEFAULT_MODEL.
@@ -296,7 +335,13 @@ class TestAnthropicProvider:
     ) -> None:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
         creds = AnthropicProvider().resolve_credentials()
-        assert creds == ("sk-ant-x", None)
+        assert creds == ("sk-ant-x", None)  # None → ChatAnthropic uses api.anthropic.com
+
+    def test_honors_anthropic_base_url_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
+        monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://localhost:8787")
+        creds = AnthropicProvider().resolve_credentials()
+        assert creds == ("sk-ant-x", "http://localhost:8787")
 
     def test_creates_native_chat_anthropic(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
@@ -304,6 +349,56 @@ class TestAnthropicProvider:
         assert isinstance(llm, ChatAnthropic)
         assert llm.model == "claude-opus-4-6"
         assert llm.max_tokens == 123
+        # No override → ChatAnthropic points at the default Anthropic endpoint.
+        assert str(llm.anthropic_api_url).rstrip("/") == ANTHROPIC_BASE_URL.rstrip("/")
+
+    def test_create_chat_model_honors_base_url_override(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
+        monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://localhost:8787")
+        llm = AnthropicProvider().create_chat_model("claude-opus-4-6", max_tokens=123)
+        assert isinstance(llm, ChatAnthropic)
+        assert str(llm.anthropic_api_url).rstrip("/") == "http://localhost:8787"
+
+    @pytest.mark.parametrize("effort", ["provider-specific-value"])
+    def test_reasoning_effort_passthrough(
+        self, monkeypatch: pytest.MonkeyPatch, effort: str
+    ) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_chat_anthropic(**kwargs: object) -> dict[str, object]:
+            captured.update(kwargs)
+            return kwargs
+
+        monkeypatch.setattr(anthropic_provider_module, "ChatAnthropic", fake_chat_anthropic)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
+        monkeypatch.setenv("SKILLSPECTOR_REASONING_EFFORT", f"  {effort}  ")
+
+        AnthropicProvider().create_chat_model("claude-opus-4-6", max_tokens=123)
+
+        assert captured["effort"] == effort
+
+    @pytest.mark.parametrize("value", [None, "   ", "\t\n"])
+    def test_reasoning_effort_blank_or_unset_omits_effort(
+        self, monkeypatch: pytest.MonkeyPatch, value: str | None
+    ) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_chat_anthropic(**kwargs: object) -> dict[str, object]:
+            captured.update(kwargs)
+            return kwargs
+
+        monkeypatch.setattr(anthropic_provider_module, "ChatAnthropic", fake_chat_anthropic)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
+        if value is None:
+            monkeypatch.delenv("SKILLSPECTOR_REASONING_EFFORT", raising=False)
+        else:
+            monkeypatch.setenv("SKILLSPECTOR_REASONING_EFFORT", value)
+
+        AnthropicProvider().create_chat_model("claude-opus-4-6", max_tokens=123)
+
+        assert "effort" not in captured
 
     def test_create_chat_model_returns_none_without_key(self) -> None:
         # No ANTHROPIC_API_KEY → no client, signalling the caller to fall back.
@@ -343,6 +438,117 @@ class TestOpenAICompatibleConstructor:
         assert llm.model_name == "gpt-5.4"
         assert llm.max_tokens == 123
         assert str(llm.openai_api_base).rstrip("/") == "http://localhost:1234/v1"
+
+    def test_reasoning_effort_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_chat_openai(**kwargs: object) -> dict[str, object]:
+            captured.update(kwargs)
+            return kwargs
+
+        monkeypatch.setattr(chat_models, "ChatOpenAI", fake_chat_openai)
+        monkeypatch.setenv("SKILLSPECTOR_REASONING_EFFORT", "  high  ")
+
+        create_openai_compatible_chat_model(
+            model="gpt-5.4",
+            credentials=("sk-x", "http://localhost:1234/v1"),
+            max_tokens=123,
+        )
+
+        assert captured["reasoning_effort"] == "high"
+
+    def test_reasoning_effort_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_chat_openai(**kwargs: object) -> dict[str, object]:
+            captured.update(kwargs)
+            return kwargs
+
+        monkeypatch.setattr(chat_models, "ChatOpenAI", fake_chat_openai)
+
+        create_openai_compatible_chat_model(
+            model="gpt-5.4",
+            credentials=("sk-x", "http://localhost:1234/v1"),
+            max_tokens=123,
+        )
+
+        assert "reasoning_effort" not in captured
+        assert captured["max_completion_tokens"] == 123
+
+    @pytest.mark.parametrize("blank_value", ["   ", "\t\n"])
+    def test_reasoning_effort_blank(
+        self, monkeypatch: pytest.MonkeyPatch, blank_value: str
+    ) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_chat_openai(**kwargs: object) -> dict[str, object]:
+            captured.update(kwargs)
+            return kwargs
+
+        monkeypatch.setattr(chat_models, "ChatOpenAI", fake_chat_openai)
+        monkeypatch.setenv("SKILLSPECTOR_REASONING_EFFORT", blank_value)
+
+        create_openai_compatible_chat_model(
+            model="gpt-5.4",
+            credentials=("sk-x", "http://localhost:1234/v1"),
+            max_tokens=123,
+        )
+
+        assert "reasoning_effort" not in captured
+        assert captured["max_completion_tokens"] == 123
+
+    def test_reasoning_effort_provider_matrix(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_chat_openai(**kwargs: object) -> dict[str, object]:
+            captured.clear()
+            captured.update(kwargs)
+            return kwargs
+
+        monkeypatch.setattr(chat_models, "ChatOpenAI", fake_chat_openai)
+        cases = (
+            (OpenAIProvider(), "OPENAI_API_KEY", "sk-x", "http://localhost:1234/v1"),
+            (NvBuildProvider(), "NVIDIA_INFERENCE_KEY", "nvapi-x", BUILD_BASE_URL),
+        )
+        for provider, key, value, endpoint in cases:
+            monkeypatch.setenv(key, value)
+            if isinstance(provider, OpenAIProvider):
+                monkeypatch.setenv("OPENAI_BASE_URL", endpoint)
+                monkeypatch.setenv("OPENAI_PROJECT_ID", "proj_123")
+            for effort in (None, "   ", " high "):
+                if effort is None:
+                    monkeypatch.delenv("SKILLSPECTOR_REASONING_EFFORT", raising=False)
+                else:
+                    monkeypatch.setenv("SKILLSPECTOR_REASONING_EFFORT", effort)
+                provider.create_chat_model("model-x", max_tokens=123)
+                assert captured["base_url"] == endpoint
+                assert captured["max_completion_tokens"] == 123
+                assert isinstance(captured["api_key"], SecretStr)
+                assert captured["api_key"].get_secret_value() == value
+                if isinstance(provider, OpenAIProvider):
+                    assert captured["default_headers"] == {"OpenAI-Project": "proj_123"}
+                if effort is None or not effort.strip():
+                    assert "reasoning_effort" not in captured
+                else:
+                    assert captured["reasoning_effort"] == "high"
+
+    def test_reasoning_effort_passthrough(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_chat_openai(**kwargs: object) -> dict[str, object]:
+            captured.update(kwargs)
+            return kwargs
+
+        monkeypatch.setattr(chat_models, "ChatOpenAI", fake_chat_openai)
+        monkeypatch.setenv("SKILLSPECTOR_REASONING_EFFORT", "provider-specific-value")
+
+        create_openai_compatible_chat_model(
+            model="gpt-5.4",
+            credentials=("sk-x", "http://localhost:1234/v1"),
+            max_tokens=123,
+        )
+
+        assert captured["reasoning_effort"] == "provider-specific-value"
 
 
 class TestProviderSelection:
@@ -565,7 +771,7 @@ class TestClaudeCLIProvider:
 
     def test_resolve_model_empty_when_no_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # No model is pinned: with SKILLSPECTOR_MODEL unset, resolve_model is ""
-        # so the CLI runs with the user's OWN configured model (we omit --model).
+        # so the Claude CLI receives no explicit --model override.
         monkeypatch.delenv("SKILLSPECTOR_MODEL", raising=False)
         assert ClaudeCLIProvider().resolve_model() == ""
         assert ClaudeCLIProvider.DEFAULT_MODEL == ""

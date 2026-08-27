@@ -18,7 +18,9 @@
 from __future__ import annotations
 
 from skillspector.models import Finding
+from skillspector.nodes.analyzers import mcp_rug_pull
 from skillspector.nodes.analyzers.mcp_rug_pull import node
+from skillspector.state import WorkflowResourceBudget
 
 
 class TestMcpRugPullNode:
@@ -34,7 +36,7 @@ class TestMcpRugPullNode:
             "previous_manifest": None,
         }
         result = node(state)
-        assert result == {"findings": []}
+        assert result["findings"] == []
 
     def test_missing_previous_manifest_key_skips(self) -> None:
         """Returns empty findings when previous_manifest key is missing in state."""
@@ -45,7 +47,7 @@ class TestMcpRugPullNode:
             },
         }
         result = node(state)
-        assert result == {"findings": []}
+        assert result["findings"] == []
 
     def test_identical_manifests_returns_empty(self) -> None:
         """Returns empty findings when current and previous manifests are identical."""
@@ -68,7 +70,7 @@ class TestMcpRugPullNode:
             "previous_manifest": manifest,
         }
         result = node(state)
-        assert result == {"findings": []}
+        assert result["findings"] == []
 
     def test_rp1_permission_expansion(self) -> None:
         """RP1 is triggered when a new permission is added in the current manifest."""
@@ -106,7 +108,7 @@ class TestMcpRugPullNode:
             },
         }
         result = node(state)
-        assert result == {"findings": []}
+        assert result["findings"] == []
 
     def test_rp2_trigger_added(self) -> None:
         """RP2 is triggered when a trigger phrase is added."""
@@ -250,3 +252,55 @@ class TestMcpRugPullNode:
         rule_ids = {f.rule_id for f in findings}
         assert rule_ids == {"RP1", "RP2", "RP3"}
         assert len(findings) == 3
+
+
+class TestResourceBounds:
+    def test_analyzer_cap_retains_prefix_and_marks_current_and_remaining_partial(
+        self, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(mcp_rug_pull, "MAX_FINDINGS_PER_ARTIFACT", 10)
+        monkeypatch.setattr(mcp_rug_pull, "MAX_FINDINGS_PER_ANALYZER", 3)
+        result = node(
+            {
+                "file_cache": {
+                    "a.sh": "npx server-a\nnpx server-b\n",
+                    "b.sh": "npx server-c\nnpx server-d\n",
+                    "c.sh": "npx server-e\n",
+                }
+            }
+        )
+
+        assert len(result["findings"]) == 3
+        events = result["inspection_ledger"]
+        assert events[0]["outcome"] == "completed"
+        assert events[1]["outcome"] == "partial"
+        assert events[1]["reason_code"] == "output_limit"
+        assert events[1]["observed_findings"] == 4
+        assert events[1]["limit_findings"] == 3
+        assert events[2]["outcome"] == "partial"
+        assert events[2]["emitted_finding_ids"] == []
+        assert result["analyzer_status_events"][0]["status"] == "degraded"
+
+    def test_expired_workflow_deadline_marks_all_planned_files_partial(self) -> None:
+        result = node(
+            {
+                "file_cache": {"a.sh": "npx server-a\n", "b.sh": "npx server-b\n"},
+                "workflow_resource_budget": WorkflowResourceBudget(max_seconds=0.0),
+            }
+        )
+
+        assert result["findings"] == []
+        assert [event["reason_code"] for event in result["inspection_ledger"]] == [
+            "runtime_limit",
+            "runtime_limit",
+        ]
+
+
+class TestInspectionLedgerResponse:
+    def test_missing_manifest_is_an_analyzer_level_non_applicability(self) -> None:
+        result = node({"components": [], "file_cache": {}})
+
+        assert result["inspection_ledger"] == []
+        status = result["analyzer_status_events"][0]
+        assert status["status"] == "not_applicable"
+        assert status["reason_code"] == "manifest_absent"

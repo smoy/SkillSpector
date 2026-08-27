@@ -35,8 +35,7 @@ class AgentCLIProviderBase:
 
     #: CLI name; must be a key in ``_agent_cli._REGISTRY``.
     BINARY_NAME: str = ""
-    #: Always "" for CLI providers — the user's own CLI-configured model is used
-    #: (we omit ``--model``). Present only so constants.py's
+    #: Always "" for CLI providers. Present only so constants.py's
     #: ``_provider.DEFAULT_MODEL`` lookup has an attribute; never pins a version.
     DEFAULT_MODEL: str = ""
     #: Optional path to a bundled ``model_registry.yaml`` for token budgets. CLI
@@ -57,7 +56,14 @@ class AgentCLIProviderBase:
 
     # -- Transport -----------------------------------------------------------
 
-    def complete(self, prompt: str, *, model: str, max_output_tokens: int = 8192) -> str:
+    def complete(
+        self,
+        prompt: str,
+        *,
+        model: str,
+        max_output_tokens: int = 8192,
+        timeout: float | None = None,
+    ) -> str:
         """Invoke the CLI via the hardened runner and return the assistant text.
 
         The prompt is passed through unchanged (parity with the HTTP path).
@@ -65,7 +71,11 @@ class AgentCLIProviderBase:
         :func:`skillspector.providers._agent_cli.run_agent_cli`.
         """
         return _agent_cli.run_agent_cli(
-            self.BINARY_NAME, prompt, model=model, max_output_tokens=max_output_tokens
+            self.BINARY_NAME,
+            prompt,
+            model=model,
+            max_output_tokens=max_output_tokens,
+            timeout=timeout if timeout is not None else _agent_cli.CLI_TIMEOUT_SECONDS,
         )
 
     # -- Metadata ------------------------------------------------------------
@@ -83,10 +93,8 @@ class AgentCLIProviderBase:
     def resolve_model(self, slot: str = "default") -> str:
         """Return the model to forward to the CLI.
 
-        CLI providers default to the user's OWN CLI-configured model (we omit
-        ``--model`` entirely), so this returns ``""`` unless the user explicitly
-        sets ``SKILLSPECTOR_MODEL`` to override it. No model versions are pinned
-        here — that keeps the providers version-proof and respects the user's own
-        default model / thinking-level configuration.
+        CLI providers omit ``--model`` unless ``SKILLSPECTOR_MODEL`` is set, so
+        this returns ``""`` by default. Each CLI then applies whatever fallback
+        model behaviour its own settings and runtime contract define.
         """
         return os.environ.get("SKILLSPECTOR_MODEL", "").strip()
